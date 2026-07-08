@@ -5,10 +5,10 @@ dist/
 .env.*
 *.log
 *.tmp
+*.tsbuildinfo
 .DS_Store
 Thumbs.db
 
 # Local generated outputs
 outputs/
 downloads/
-
