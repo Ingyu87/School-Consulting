@@ -14,63 +14,54 @@ import {
   Square,
   Upload
 } from "lucide-react";
-import { defaultModules } from "./data/modules";
+import { InterviewFormView } from "./components/InterviewFormView";
+import { PlanFormView } from "./components/PlanFormView";
+import { SchoolInfoForm } from "./components/SchoolInfoForm";
 import { generateAiDraft } from "./lib/ai";
-import { analyzeInterviewAudio } from "./lib/audio";
+import { summarizeInterviewTranscript, transcribeInterviewSegment } from "./lib/audio";
+import { createInitialState, hydrateState } from "./lib/defaults";
 import { buildInsights, stageDescriptions, stageTone } from "./lib/diagnosis";
 import { parseDiagnosisCsv } from "./lib/csv/parseDiagnosisCsv";
 import { parseLectureScheduleCsv } from "./lib/csv/parseLectureScheduleCsv";
 import { downloadInterviewDocx, downloadPlanDocx } from "./lib/docx/exportDocs";
 import { clearState, loadState, saveState } from "./lib/storage";
 import { validateModules } from "./lib/validation";
-import type { AppState, TrainingModule } from "./types";
+import type { AiModuleUpdate, AppState, InterviewState, PlanState, SchoolInfo, TrainingModule } from "./types";
 
-const initialState: AppState = {
-  activeTab: "diagnosis",
-  project: null,
-  modules: defaultModules,
-  interview: {
-    dateTime: "",
-    coordinators: "",
-    participants: "",
-    transcript: "",
-    notes: "",
-    resultSummary: ""
-  },
-  plan: {
-    strengths: "",
-    strength1: "",
-    strength2: "",
-    challenges: "",
-    challenge1: "",
-    challenge2: "",
-    interviewSummary: "",
-    roadmapNotes: "",
-    editedInsights: "",
-    diagnosisImplications: {},
-    insightSource: "basic"
-  },
-  updatedAt: new Date().toISOString()
-};
+// Vercel 함수 요청 크기 제한(약 4.5MB) 때문에 긴 면담 녹음은 구간으로 나눠 전사한다.
+const SEGMENT_MS = 180_000;
 
 const tabs = [
   ["diagnosis", "진단 분석"],
-  ["plan", "운영계획"],
-  ["modules", "연수 구성"],
+  ["school", "학교 정보"],
   ["interview", "심층면담"],
+  ["modules", "연수 구성"],
+  ["plan", "운영계획"],
   ["export", "다운로드"]
 ] as const;
 
 export default function App() {
-  const [state, setState] = useState<AppState>(initialState);
+  const [state, setState] = useState<AppState>(createInitialState);
   const [saveStatus, setSaveStatus] = useState("불러오는 중");
   const [uploadStatus, setUploadStatus] = useState("");
   const [scheduleStatus, setScheduleStatus] = useState("");
   const [aiStatus, setAiStatus] = useState("");
   const [recordingStatus, setRecordingStatus] = useState("");
   const [isRecording, setIsRecording] = useState(false);
+
+  const stateRef = useRef(state);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
+  const segmentTimerRef = useRef<number | null>(null);
+  const segmentIndexRef = useRef(0);
+  const finalizingRef = useRef(false);
+  const cancelledRef = useRef(false);
+  const transcriptPartsRef = useRef<string[]>([]);
+  const transcribeQueueRef = useRef<Promise<void>>(Promise.resolve());
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   useEffect(() => {
     loadState().then((saved) => {
@@ -95,38 +86,54 @@ export default function App() {
   const selectedModules = useMemo(() => state.modules.filter((module) => module.selected), [state.modules]);
   const diagnosisSummary = state.plan.editedInsights || insights.draft;
   const insightSourceLabel = state.plan.insightSource === "ai" ? "AI 심층 분석" : state.plan.insightSource === "edited" ? "수정된 분석 초안" : "기본 CSV 분석";
-  const selectedHours = state.modules.filter((module) => module.selected).reduce((sum, module) => sum + module.hours, 0);
+  const selectedHours = selectedModules.reduce((sum, module) => sum + module.hours, 0);
   const errorCount = validations.filter((item) => item.level === "error").length;
 
   function patchState(patch: Partial<AppState>) {
     setState((current) => ({ ...current, ...patch }));
   }
 
+  function patchInterview(patch: Partial<InterviewState>) {
+    setState((current) => ({ ...current, interview: { ...current.interview, ...patch } }));
+  }
+
+  function patchPlan(patch: Partial<PlanState>) {
+    setState((current) => ({ ...current, plan: { ...current.plan, ...patch } }));
+  }
+
+  function patchSchool(patch: Partial<SchoolInfo>) {
+    setState((current) => ({ ...current, school: { ...current.school, ...patch } }));
+  }
+
   async function handleCsv(file: File) {
     setUploadStatus("CSV 분석 중");
     try {
       const project = await parseDiagnosisCsv(file);
-      setState((current) => ({
-        ...current,
+      if (state.project) {
+        const confirmed = window.confirm(
+          `현재 ${state.project.schoolName} 작업(면담·연수 구성·운영계획 입력 포함)을 모두 지우고 ${project.schoolName} 프로젝트를 새로 시작할까요?\n\n기존 작업을 보관하려면 취소 후 다운로드 탭에서 '작업 저장'을 먼저 해주세요.`
+        );
+        if (!confirmed) {
+          setUploadStatus("새 학교 업로드를 취소했습니다.");
+          return;
+        }
+      }
+      const fresh = createInitialState();
+      setState({
+        ...fresh,
         project,
         activeTab: "diagnosis",
-        modules: current.modules.map((module) => ({
-          ...module,
-          place: module.place || project.schoolName
-        })),
-        interview: {
-          ...current.interview,
-          dateTime: current.interview.dateTime || `장소: ${project.schoolName}`,
-          notes: current.interview.notes || `심층면담은 ${project.schoolName}에서 진행하는 것을 기본으로 하며, 세부 일시와 참석자는 학교 확인 후 확정한다.`
-        },
-        plan: {
-          ...current.plan,
-          editedInsights: buildInsights(project.moduleScores).draft,
-          diagnosisImplications: {},
-          insightSource: "basic"
-        }
-      }));
-      setUploadStatus(`${project.schoolName} 분석 완료`);
+        modules: fresh.modules.map((module) => ({ ...module, place: project.schoolName })),
+        plan: { ...fresh.plan, editedInsights: buildInsights(project.moduleScores).draft }
+      });
+      setAiStatus("");
+      setScheduleStatus("");
+      setRecordingStatus("");
+      setUploadStatus(
+        project.parseWarnings.length
+          ? `${project.schoolName} 분석 완료 · 확인 필요: ${project.parseWarnings.join(" / ")}`
+          : `${project.schoolName} 분석 완료`
+      );
     } catch (error) {
       setUploadStatus(error instanceof Error ? error.message : "CSV 분석 실패");
     }
@@ -143,16 +150,22 @@ export default function App() {
           if (!update) return { ...module, place: module.place || schoolName };
           return mergeModuleAiUpdate(module, update, schoolName);
         });
+        const teachers = [...current.interview.teachers];
+        if (imported.teacher && !teachers.some((teacher) => teacher.name)) {
+          teachers[0] = { ...teachers[0], name: imported.teacher, role: teachers[0].role || "학교 담당자(부장)" };
+        }
 
         return {
           ...current,
           modules: nextModules,
           interview: {
             ...current.interview,
-            dateTime: imported.interviewDateTime || current.interview.dateTime || `장소: ${schoolName}`,
-            coordinators: imported.coordinators.join(", ") || current.interview.coordinators,
-            participants: imported.teacher || current.interview.participants,
-            notes: [current.interview.notes, ...imported.notes].filter(Boolean).join("\n\n")
+            dateTime: imported.interviewDateTime || current.interview.dateTime,
+            leadCoordinator: current.interview.leadCoordinator || imported.coordinators[0] || "",
+            coordinator2: current.interview.coordinator2 || imported.coordinators[1] || "",
+            coordinator3: current.interview.coordinator3 || imported.coordinators[2] || "",
+            teachers,
+            additionalChecks: [current.interview.additionalChecks, ...imported.notes].filter(Boolean).join("\n\n")
           }
         };
       });
@@ -185,13 +198,14 @@ export default function App() {
         task,
         schoolName: state.project.schoolName,
         project: state.project,
+        school: state.school,
         modules: state.modules,
         interview: state.interview,
         plan: state.plan
       });
 
       setState((current) => {
-        const nextModules = task === "module-content" && draft.moduleUpdates?.length
+        const nextModules = draft.moduleUpdates?.length
           ? current.modules.map((module) => {
               const update = draft.moduleUpdates?.find((item) => item.id === module.id);
               if (!update) return module;
@@ -204,8 +218,11 @@ export default function App() {
           modules: nextModules,
           interview: {
             ...current.interview,
-            dateTime: current.interview.dateTime || `장소: ${current.project?.schoolName ?? ""}`,
-            notes: draft.interviewNotes ?? current.interview.notes,
+            priorLevel: draft.priorLevel ?? current.interview.priorLevel,
+            infraConsiderations: draft.infraConsiderations ?? current.interview.infraConsiderations,
+            schoolRequests: draft.schoolRequests ?? current.interview.schoolRequests,
+            additionalChecks: draft.additionalChecks ?? current.interview.additionalChecks,
+            participationGoal: draft.participationGoal ?? current.interview.participationGoal,
             resultSummary: draft.interviewResultSummary ?? current.interview.resultSummary
           },
           plan: {
@@ -213,13 +230,15 @@ export default function App() {
             editedInsights: draft.diagnosisInsight ?? current.plan.editedInsights,
             diagnosisImplications: draft.diagnosisImplications ?? current.plan.diagnosisImplications,
             insightSource: draft.diagnosisInsight ? "ai" : current.plan.insightSource,
-            strengths: draft.strengths ?? current.plan.strengths,
+            strengths: draft.strength1 ?? current.plan.strengths,
             strength1: draft.strength1 ?? current.plan.strength1,
             strength2: draft.strength2 ?? current.plan.strength2,
-            challenges: draft.challenges ?? current.plan.challenges,
+            challenges: draft.challenge1 ?? current.plan.challenges,
             challenge1: draft.challenge1 ?? current.plan.challenge1,
             challenge2: draft.challenge2 ?? current.plan.challenge2,
             interviewSummary: draft.interviewSummary ?? current.plan.interviewSummary,
+            issueGoals: normalizeIssueGoals(draft.issueGoals) ?? current.plan.issueGoals,
+            roadmapDirection: draft.roadmapDirection ?? current.plan.roadmapDirection,
             roadmapNotes: draft.roadmapNotes ?? current.plan.roadmapNotes
           },
           activeTab: task === "diagnosis" ? "diagnosis" : task === "interview-plan" ? "interview" : "modules"
@@ -232,53 +251,128 @@ export default function App() {
   }
 
   async function startInterviewRecording() {
+    if (isRecording) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      audioChunksRef.current = [];
-      const recorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = recorder;
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) audioChunksRef.current.push(event.data);
-      };
-      recorder.onstop = () => {
-        stream.getTracks().forEach((track) => track.stop());
-        void analyzeRecordedInterview(new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" }));
-      };
-      recorder.start();
+      streamRef.current = stream;
+      finalizingRef.current = false;
+      cancelledRef.current = false;
+      segmentIndexRef.current = 0;
+      transcriptPartsRef.current = stateRef.current.interview.transcript ? [stateRef.current.interview.transcript] : [];
+      transcribeQueueRef.current = Promise.resolve();
       setIsRecording(true);
-      setRecordingStatus("녹음 중");
+      setRecordingStatus("녹음 중 · 3분 단위로 자동 전사됩니다.");
+      startSegmentRecorder();
     } catch (error) {
       setRecordingStatus(error instanceof Error ? error.message : "마이크 권한을 확인해주세요.");
     }
   }
 
-  function stopInterviewRecording() {
-    if (!mediaRecorderRef.current || mediaRecorderRef.current.state === "inactive") return;
-    setRecordingStatus("전사 및 AI 분석 중");
-    setIsRecording(false);
-    mediaRecorderRef.current.stop();
+  function startSegmentRecorder() {
+    const stream = streamRef.current;
+    if (!stream) return;
+    const recorder = new MediaRecorder(stream);
+    const chunks: Blob[] = [];
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) chunks.push(event.data);
+    };
+    recorder.onstop = () => {
+      const isFinal = finalizingRef.current;
+      if (!cancelledRef.current) {
+        const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+        enqueueSegment(blob, segmentIndexRef.current++, isFinal);
+      }
+      if (!isFinal && !cancelledRef.current) {
+        startSegmentRecorder();
+      } else {
+        stream.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
+    };
+    recorder.start();
+    mediaRecorderRef.current = recorder;
+    segmentTimerRef.current = window.setTimeout(() => {
+      if (recorder.state !== "inactive" && !finalizingRef.current && !cancelledRef.current) recorder.stop();
+    }, SEGMENT_MS);
   }
 
-  async function analyzeRecordedInterview(audio: Blob) {
+  function enqueueSegment(blob: Blob, index: number, isFinal: boolean) {
+    transcribeQueueRef.current = transcribeQueueRef.current.then(async () => {
+      if (cancelledRef.current) return;
+      if (blob.size > 1000) {
+        setRecordingStatus(`구간 ${index + 1} 전사 중${isFinal ? " (마지막 구간)" : ""}`);
+        try {
+          const transcript = await transcribeInterviewSegment(blob, index);
+          if (transcript.trim()) appendTranscript(transcript.trim());
+        } catch (error) {
+          appendTranscript(`(구간 ${index + 1} 전사 실패: ${error instanceof Error ? error.message : "알 수 없는 오류"})`);
+        }
+      }
+      if (isFinal) {
+        await finishRecordingAnalysis();
+      } else if (!finalizingRef.current && !cancelledRef.current) {
+        setRecordingStatus(`녹음 중 · 구간 ${index + 1} 전사 완료`);
+      }
+    });
+  }
+
+  function appendTranscript(text: string) {
+    transcriptPartsRef.current.push(text);
+    const joined = transcriptPartsRef.current.join("\n\n");
+    setState((current) => ({ ...current, interview: { ...current.interview, transcript: joined } }));
+  }
+
+  async function finishRecordingAnalysis() {
+    if (cancelledRef.current) return;
+    const transcript = transcriptPartsRef.current.join("\n\n").trim();
+    if (!transcript) {
+      setRecordingStatus("전사된 내용이 없습니다. 마이크 입력을 확인해주세요.");
+      return;
+    }
+    setRecordingStatus("전사 완료 · 면담 내용 종합 분석 중");
     try {
-      const result = await analyzeInterviewAudio(audio, state);
+      const summary = await summarizeInterviewTranscript(transcript, stateRef.current);
       setState((current) => ({
         ...current,
         interview: {
           ...current.interview,
-          transcript: result.transcript || current.interview.transcript,
-          notes: result.considerations || current.interview.notes,
-          resultSummary: result.resultSummary || current.interview.resultSummary
+          priorLevel: summary.priorLevel || current.interview.priorLevel,
+          infraConsiderations: summary.infraConsiderations || current.interview.infraConsiderations,
+          schoolRequests: summary.schoolRequests || current.interview.schoolRequests,
+          additionalChecks: summary.additionalChecks || current.interview.additionalChecks,
+          participationGoal: summary.participationGoal || current.interview.participationGoal,
+          resultSummary: summary.resultSummary || current.interview.resultSummary
         },
         plan: {
           ...current.plan,
-          interviewSummary: result.planInterviewSummary || current.plan.interviewSummary
+          interviewSummary: summary.planInterviewSummary || current.plan.interviewSummary
         }
       }));
-      setRecordingStatus("전사 및 AI 분석 완료");
+      setRecordingStatus("전사 및 AI 분석 완료 · 심층면담 항목에 반영했습니다.");
     } catch (error) {
-      setRecordingStatus(error instanceof Error ? error.message : "전사 및 AI 분석 실패");
+      setRecordingStatus(error instanceof Error ? error.message : "면담 종합 분석 실패");
     }
+  }
+
+  function stopInterviewRecording() {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state === "inactive") return;
+    finalizingRef.current = true;
+    if (segmentTimerRef.current) window.clearTimeout(segmentTimerRef.current);
+    setIsRecording(false);
+    setRecordingStatus("녹음 종료 · 마지막 구간 전사 중");
+    recorder.stop();
+  }
+
+  function cancelRecording() {
+    cancelledRef.current = true;
+    finalizingRef.current = true;
+    if (segmentTimerRef.current) window.clearTimeout(segmentTimerRef.current);
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== "inactive") recorder.stop();
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    setIsRecording(false);
   }
 
   function applyModule(id: number) {
@@ -308,7 +402,7 @@ export default function App() {
   function downloadScheduleCsv() {
     const schoolName = state.project?.schoolName ?? "새학교";
     const rows = [
-      ["순번", "과정", "대상", "차시", "일정", "시간", "장소", "방식", "희망 주제", "준비물/확인사항"],
+      ["순번", "과정", "대상", "차시", "일정", "시간", "장소", "인원", "방식", "중점 도구", "운영 주제", "준비물/확인사항"],
       ...selectedModules.map((module, index) => [
         String(index + 1),
         `${module.id}. ${module.name}`,
@@ -317,13 +411,15 @@ export default function App() {
         module.date || "학교 확인 필요",
         module.time || "학교 확인 필요",
         module.place || schoolName,
+        module.headcount || "학교 확인 필요",
         module.method,
+        module.mainTool,
         module.topic,
         module.materials
       ])
     ];
     const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\r\n");
-    const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
+    const blob = new Blob([String.fromCharCode(0xfeff), csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -333,16 +429,25 @@ export default function App() {
   }
 
   async function restoreBackup(file: File) {
-    const text = await file.text();
-    setState(JSON.parse(text) as AppState);
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as { modules?: unknown }).modules)) {
+        throw new Error("이 앱의 백업 JSON 형식이 아닙니다.");
+      }
+      setState(hydrateState(parsed));
+      setUploadStatus("작업 파일을 불러왔습니다.");
+    } catch (error) {
+      setUploadStatus(error instanceof Error ? `작업 불러오기 실패: ${error.message}` : "작업 불러오기 실패");
+    }
   }
 
   async function resetWorkspace() {
     const confirmed = window.confirm("현재 입력한 내용과 자동저장된 작업을 모두 지우고 처음부터 시작할까요?");
     if (!confirmed) return;
-    if (isRecording) stopInterviewRecording();
+    cancelRecording();
     await clearState();
-    setState({ ...initialState, updatedAt: new Date().toISOString() });
+    setState(createInitialState());
     setUploadStatus("");
     setScheduleStatus("");
     setAiStatus("");
@@ -465,6 +570,43 @@ export default function App() {
                 </table>
               </div>
             </article>
+            {(state.project?.infrastructureDistributions.length ?? 0) > 0 && (
+              <article className="panel wide">
+                <h2>학교 디지털 기반 교육 현황 — 문항별 응답 분포</h2>
+                <p className="formHint">운영계획서 Ⅰ장 현황표에 그대로 출력됩니다.</p>
+                {state.project!.infrastructureDistributions.map((question) => (
+                  <div className="distBlock" key={question.question}>
+                    <strong>{question.question}</strong>
+                    <div className="bars">
+                      {question.options.map((option) => (
+                        <div className="barRow" key={option.label}>
+                          <span>{option.label}</span>
+                          <div className="barTrack">
+                            <div className="barFill satisfy" style={{ width: `${Math.min(100, Math.max(2, option.ratio))}%` }} />
+                          </div>
+                          <strong>{option.ratio.toFixed(1)}%</strong>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </article>
+            )}
+            {(state.project?.openEndedQuestions.length ?? 0) > 0 && (
+              <article className="panel wide">
+                <h2>서술형 응답 정리</h2>
+                {state.project!.openEndedQuestions.map((question) => (
+                  <div className="distBlock" key={question.question}>
+                    <strong>{question.question}</strong>
+                    <ul className="openEndedList">
+                      {question.responses.map((responseText, index) => (
+                        <li key={index}>{responseText}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </article>
+            )}
             <article className="panel wide">
               <h2>단계별 설명</h2>
               <div className="stageGuideGrid">
@@ -498,34 +640,38 @@ export default function App() {
               <h2>분석 초안 편집</h2>
               <textarea
                 value={state.plan.editedInsights}
-                onChange={(event) => patchState({ plan: { ...state.plan, editedInsights: event.target.value, insightSource: "edited" } })}
+                onChange={(event) => patchPlan({ editedInsights: event.target.value, insightSource: "edited" })}
                 placeholder="CSV 업로드 후 운영계획서에 반영할 분석 초안을 편집하세요."
               />
             </article>
           </section>
         )}
 
+        {state.activeTab === "school" && (
+          <SchoolInfoForm school={state.school} schoolName={state.project?.schoolName ?? ""} onChange={patchSchool} />
+        )}
+
         {state.activeTab === "interview" && (
-          <section className="panel formPanel">
-            <div className="sectionToolbar">
-              <h2>심층면담지 작성</h2>
-              <div className="toolbarActions">
-                <button className={isRecording ? "button dangerButton" : "button ghost"} onClick={isRecording ? stopInterviewRecording : startInterviewRecording}>
-                  {isRecording ? <Square size={17} /> : <Mic size={17} />}
-                  {isRecording ? "녹음 정지" : "녹음 시작"}
-                </button>
-                <button className="button primary" onClick={() => runAiDraft("interview-plan")}>
-                  <Sparkles size={17} />
-                  AI 초안
-                </button>
+          <section className="formStack">
+            <div className="panel">
+              <div className="sectionToolbar">
+                <div>
+                  <h2>심층면담지 작성</h2>
+                  <p className="formHint">심층면담지.pdf 양식 순서 그대로 작성됩니다. 녹음하면 구간별로 자동 전사되고, 종료 시 면담 항목이 자동 채워집니다.</p>
+                </div>
+                <div className="toolbarActions">
+                  <button className={isRecording ? "button dangerButton" : "button ghost"} onClick={isRecording ? stopInterviewRecording : startInterviewRecording}>
+                    {isRecording ? <Square size={17} /> : <Mic size={17} />}
+                    {isRecording ? "녹음 정지" : "녹음 시작"}
+                  </button>
+                  <button className="button primary" onClick={() => runAiDraft("interview-plan")}>
+                    <Sparkles size={17} />
+                    AI 초안
+                  </button>
+                </div>
               </div>
             </div>
-            <FormInput label="심층면담 일시/장소" value={state.interview.dateTime} onChange={(value) => patchState({ interview: { ...state.interview, dateTime: value } })} />
-            <FormInput label="참여 코디네이터" value={state.interview.coordinators} onChange={(value) => patchState({ interview: { ...state.interview, coordinators: value } })} />
-            <FormInput label="참여 교원" value={state.interview.participants} onChange={(value) => patchState({ interview: { ...state.interview, participants: value } })} />
-            <FormArea label="면담 전사" value={state.interview.transcript ?? ""} onChange={(value) => patchState({ interview: { ...state.interview, transcript: value } })} />
-            <FormArea label="기타 고려사항" value={state.interview.notes} onChange={(value) => patchState({ interview: { ...state.interview, notes: value } })} />
-            <FormArea label="면담 핵심 결과" value={state.interview.resultSummary} onChange={(value) => patchState({ interview: { ...state.interview, resultSummary: value } })} />
+            <InterviewFormView interview={state.interview} onChange={patchInterview} />
           </section>
         )}
 
@@ -548,7 +694,7 @@ export default function App() {
                 <div>
                   <p className="eyebrow">AI 작성 보조</p>
                   <h2>프로그램 초안·기대효과 작성</h2>
-                  <p>사람이 정한 차시, 방식, 일정, 시간, 장소, 희망 주제는 유지하고, 선택된 과정의 세부 프로그램 초안과 기대효과만 작성합니다.</p>
+                  <p>사람이 정한 차시, 방식, 일정, 시간, 장소, 희망 주제는 유지하고, 선택된 과정의 프로그램명·우리학교 목소리·세부 프로그램 초안·기대효과만 작성합니다.</p>
                 </div>
                 <button className="button primary" onClick={() => runAiDraft("module-content")}>
                   <Sparkles size={17} />
@@ -574,10 +720,21 @@ export default function App() {
                     <label>일정<input value={module.date} onChange={(event) => updateModule(module.id, { date: event.target.value })} /></label>
                     <label>시간<input value={module.time} onChange={(event) => updateModule(module.id, { time: event.target.value })} /></label>
                     <label>장소<input value={module.place} onChange={(event) => updateModule(module.id, { place: event.target.value })} /></label>
-                    <label>희망 주제<input value={module.topic} onChange={(event) => updateModule(module.id, { topic: event.target.value })} /></label>
+                    <label>인원<input value={module.headcount} onChange={(event) => updateModule(module.id, { headcount: event.target.value })} /></label>
+                    <label>회차<input value={module.sessionRound} onChange={(event) => updateModule(module.id, { sessionRound: event.target.value })} placeholder="예: 1" /></label>
+                    <label>중점 도구<input value={module.mainTool} onChange={(event) => updateModule(module.id, { mainTool: event.target.value })} placeholder="예: GEMINI" /></label>
+                    <label>운영 주제<input value={module.topic} onChange={(event) => updateModule(module.id, { topic: event.target.value })} /></label>
                   </div>
                   {module.selected && (
                     <div className="programEditor">
+                      <label>
+                        프로그램명(주제)
+                        <input value={module.programName} onChange={(event) => updateModule(module.id, { programName: event.target.value })} placeholder={`예: ${state.project?.schoolName ?? "우리학교"} 알아보기`} />
+                      </label>
+                      <label>
+                        우리학교 목소리
+                        <input value={module.schoolVoice} onChange={(event) => updateModule(module.id, { schoolVoice: event.target.value })} placeholder="면담·진단에서 확인된 학교 요구" />
+                      </label>
                       <label>
                         세부 프로그램 초안
                         <textarea value={module.editableProgram} onChange={(event) => updateModule(module.id, { editableProgram: event.target.value })} />
@@ -589,6 +746,10 @@ export default function App() {
                       <label>
                         준비물/확인사항
                         <input value={module.materials} onChange={(event) => updateModule(module.id, { materials: event.target.value })} />
+                      </label>
+                      <label>
+                        비고
+                        <input value={module.note} onChange={(event) => updateModule(module.id, { note: event.target.value })} />
                       </label>
                     </div>
                   )}
@@ -605,16 +766,20 @@ export default function App() {
         )}
 
         {state.activeTab === "plan" && (
-          <section className="panel formPanel">
-            <h2>운영계획서 작성</h2>
-            <div className="twoColumnFields">
-              <FormArea label="우리학교 강점 1" value={state.plan.strength1 ?? state.plan.strengths} onChange={(value) => patchState({ plan: { ...state.plan, strength1: value } })} />
-              <FormArea label="우리학교 강점 2" value={state.plan.strength2 ?? ""} onChange={(value) => patchState({ plan: { ...state.plan, strength2: value } })} />
-              <FormArea label="도전 과제 1" value={state.plan.challenge1 ?? state.plan.challenges} onChange={(value) => patchState({ plan: { ...state.plan, challenge1: value } })} />
-              <FormArea label="도전 과제 2" value={state.plan.challenge2 ?? ""} onChange={(value) => patchState({ plan: { ...state.plan, challenge2: value } })} />
+          <section className="formStack">
+            <div className="panel">
+              <div className="sectionToolbar">
+                <div>
+                  <h2>운영계획서 작성</h2>
+                  <p className="formHint">운영계획서.pdf 양식 순서(Ⅰ 현황 → Ⅱ 강점·과제 → Ⅲ 면담 요약 → Ⅳ 이슈→목표 → Ⅴ 로드맵)대로 출력됩니다. Ⅰ장 현황·진단 분석은 진단 분석 탭에서 편집합니다.</p>
+                </div>
+                <button className="button primary" onClick={() => runAiDraft("interview-plan")}>
+                  <Sparkles size={17} />
+                  AI 초안
+                </button>
+              </div>
             </div>
-            <FormArea label="심층면담 결과 요약" value={state.plan.interviewSummary} onChange={(value) => patchState({ plan: { ...state.plan, interviewSummary: value } })} />
-            <FormArea label="로드맵 및 기대효과" value={state.plan.roadmapNotes} onChange={(value) => patchState({ plan: { ...state.plan, roadmapNotes: value } })} />
+            <PlanFormView plan={state.plan} onChange={patchPlan} />
           </section>
         )}
 
@@ -636,20 +801,20 @@ export default function App() {
             <article className="panel downloadCard">
               <FileText size={34} />
               <h2>심층면담지 DOCX</h2>
-              <p>면담 개요, 안내 확인, 연수 구성, 고려사항을 문서로 생성합니다.</p>
+              <p>필수 안내 확인, 운영 개요, 학교 일반사항·인프라, 참여 목표, 친화도 진단, 모듈 구성, 고려사항, 핵심 요약을 PDF 양식 순서로 생성합니다.</p>
               <button className="button primary" onClick={() => downloadInterviewDocx(state)}><FileDown size={18} />다운로드</button>
             </article>
             <article className="panel downloadCard">
               <FileText size={34} />
               <h2>운영계획서 DOCX</h2>
-              <p>진단 분석, 강점/도전과제, 로드맵, 기대효과를 문서로 생성합니다.</p>
+              <p>현황 분석, 강점·도전과제, 1·2차 면담 요약, 이슈→목표, 과정별 세부 프로그램·기대효과를 PDF 양식 순서로 생성합니다.</p>
               <button className="button primary" onClick={() => downloadPlanDocx(state)}><FileDown size={18} />다운로드</button>
             </article>
             <article className="panel workFileCard wide">
               <div>
                 <p className="eyebrow">선택 사항</p>
                 <h2>작업 파일 관리</h2>
-                <p>현재 입력 상태를 파일로 보관하거나, 다른 컴퓨터에서 이어서 작업할 때 사용합니다.</p>
+                <p>현재 입력 상태를 파일로 보관하거나, 다른 컴퓨터·다른 학교 작업으로 이어서 할 때 사용합니다.</p>
               </div>
               <div className="workFileActions">
                 <label className="button ghost">
@@ -670,14 +835,6 @@ export default function App() {
   );
 }
 
-function FormInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
-  return <label className="field"><span>{label}</span><input value={value} onChange={(event) => onChange(event.target.value)} /></label>;
-}
-
-function FormArea({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
-  return <label className="field"><span>{label}</span><textarea value={value} onChange={(event) => onChange(event.target.value)} /></label>;
-}
-
 function ScheduleTable({ modules, schoolName }: { modules: TrainingModule[]; schoolName: string }) {
   if (modules.length === 0) {
     return <p className="emptyText">선택된 과정이 없습니다. 연수 구성에서 과정을 선택하면 스케줄표가 생성됩니다.</p>;
@@ -695,8 +852,10 @@ function ScheduleTable({ modules, schoolName }: { modules: TrainingModule[]; sch
             <th>일정</th>
             <th>시간</th>
             <th>장소</th>
+            <th>인원</th>
             <th>방식</th>
-            <th>희망 주제</th>
+            <th>중점 도구</th>
+            <th>운영 주제</th>
             <th>준비물/확인사항</th>
           </tr>
         </thead>
@@ -710,7 +869,9 @@ function ScheduleTable({ modules, schoolName }: { modules: TrainingModule[]; sch
               <td>{module.date || "학교 확인 필요"}</td>
               <td>{module.time || "학교 확인 필요"}</td>
               <td>{module.place || schoolName}</td>
+              <td>{module.headcount || "학교 확인 필요"}</td>
               <td>{module.method}</td>
+              <td>{module.mainTool || "-"}</td>
               <td>{module.topic || "학교 확인 필요"}</td>
               <td>{module.materials || "학교 확인 필요"}</td>
             </tr>
@@ -721,7 +882,7 @@ function ScheduleTable({ modules, schoolName }: { modules: TrainingModule[]; sch
   );
 }
 
-function mergeModuleAiUpdate(module: TrainingModule, update: NonNullable<Awaited<ReturnType<typeof generateAiDraft>>["moduleUpdates"]>[number], schoolName: string): TrainingModule {
+function mergeModuleAiUpdate(module: TrainingModule, update: AiModuleUpdate, schoolName: string): TrainingModule {
   return {
     ...module,
     selected: module.required ? true : update.selected ?? module.selected,
@@ -729,7 +890,10 @@ function mergeModuleAiUpdate(module: TrainingModule, update: NonNullable<Awaited
     date: update.date ?? module.date,
     time: update.time ?? module.time,
     method: update.method ?? module.method,
+    mainTool: update.mainTool ?? module.mainTool,
     topic: update.topic ?? module.topic,
+    programName: update.programName ?? module.programName,
+    schoolVoice: update.schoolVoice ?? module.schoolVoice,
     editableProgram: update.editableProgram ?? module.editableProgram,
     expectedEffect: update.expectedEffect ?? module.expectedEffect,
     materials: update.materials ?? module.materials,
@@ -737,30 +901,29 @@ function mergeModuleAiUpdate(module: TrainingModule, update: NonNullable<Awaited
   };
 }
 
-function mergeModuleContentUpdate(module: TrainingModule, update: NonNullable<Awaited<ReturnType<typeof generateAiDraft>>["moduleUpdates"]>[number]): TrainingModule {
+function mergeModuleContentUpdate(module: TrainingModule, update: AiModuleUpdate): TrainingModule {
   return {
     ...module,
+    programName: update.programName ?? module.programName,
+    schoolVoice: update.schoolVoice ?? module.schoolVoice,
     editableProgram: update.editableProgram ?? module.editableProgram,
     expectedEffect: update.expectedEffect ?? module.expectedEffect,
     materials: update.materials ?? module.materials
   };
 }
 
-function hydrateState(saved: AppState): AppState {
-  const savedById = new Map(saved.modules.map((module) => [module.id, module]));
-  return {
-    ...initialState,
-    ...saved,
-    modules: defaultModules.map((base) => ({
-      ...base,
-      ...savedById.get(base.id),
-      description: savedById.get(base.id)?.description ?? base.description,
-      defaultProgram: savedById.get(base.id)?.defaultProgram ?? base.defaultProgram,
-      editableProgram: savedById.get(base.id)?.editableProgram ?? base.editableProgram,
-      expectedEffect: savedById.get(base.id)?.expectedEffect ?? base.expectedEffect,
-      materials: savedById.get(base.id)?.materials ?? base.materials
-    }))
-  };
+function normalizeIssueGoals(value: unknown) {
+  if (!Array.isArray(value) || value.length === 0) return undefined;
+  const issueGoals = [
+    { issue: "", goal: "" },
+    { issue: "", goal: "" },
+    { issue: "", goal: "" }
+  ];
+  value.slice(0, 3).forEach((item, index) => {
+    if (!item || typeof item !== "object") return;
+    issueGoals[index] = { issue: String((item as any).issue ?? ""), goal: String((item as any).goal ?? "") };
+  });
+  return issueGoals;
 }
 
 function escapeCsv(value: string) {

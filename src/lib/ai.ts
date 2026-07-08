@@ -1,18 +1,8 @@
 import type { AiDraftRequest, AiDraftResponse } from "../types";
+import { postJson } from "./api";
 
 export async function generateAiDraft(request: AiDraftRequest): Promise<AiDraftResponse> {
-  const response = await fetch("/api/generate-ai-draft", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(compactRequest(request))
-  });
-
-  if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "AI 초안 생성에 실패했습니다.");
-  }
-
-  return response.json() as Promise<AiDraftResponse>;
+  return postJson<AiDraftResponse>("/api/generate-ai-draft", compactRequest(request));
 }
 
 function compactRequest(request: AiDraftRequest): AiDraftRequest {

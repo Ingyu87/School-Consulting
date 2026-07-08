@@ -9,43 +9,155 @@ import {
   TableCell,
   TableRow,
   TextRun,
+  VerticalAlign,
   WidthType
 } from "docx";
 import type { AppState, TrainingModule } from "../../types";
 import { buildInsights, stageDescriptions } from "../diagnosis";
+import {
+  capabilityOptions,
+  goalOptions,
+  noticeItems,
+  reactionOptions,
+  submissionEmail
+} from "../../data/officialOptions";
 
 const navy = "17296B";
 const gray = "F3F5F8";
 
+const circledNumbers = ["①", "②", "③", "④", "⑤"];
+
+// ─────────────────────────────────────────────
+// 심층면담지: 심층면담지.pdf 섹션 순서 그대로 생성
+// ─────────────────────────────────────────────
 export async function downloadInterviewDocx(state: AppState) {
   const schoolName = state.project?.schoolName ?? "새학교";
+  const { interview, school, modules } = state;
+  const selected = modules.filter((module) => module.selected);
+
   const doc = new Document({
     sections: [
       {
         children: [
-          title(`${schoolName} 심층면담지`),
+          title(`${schoolName} 찾아가는 학교 컨설팅 심층면담지`),
+          section("[필수 안내] 학교 연수담당자 역할 사전 안내 및 동의 확인 / 코디네이터 셀프 점검"),
+          table(
+            [["구분", "내용", "안내 확인"]],
+            noticeItems.map((item, index) => [item.title, item.detail, interview.noticeChecks[index] ? "안내 완료" : "미확인"]),
+            [24, 60, 16]
+          ),
+
+          section("Ⅰ. 심층면담 운영 개요"),
           kvTable([
-            ["심층면담 일시", state.interview.dateTime],
-            ["참여 코디네이터", state.interview.coordinators],
-            ["참여 교원", state.interview.participants],
-            ["면담 핵심 결과", state.interview.resultSummary]
+            ["심층면담 일시", interview.dateTime],
+            ["리더 코디네이터", interview.leadCoordinator],
+            ["코디네이터", interview.coordinator2],
+            ["코디네이터", interview.coordinator3],
+            ["운영기관 지원 담당자", interview.operationManager]
           ]),
-          section("필수 안내 확인"),
-          ...bullets([
-            "사전/사후 자가진단 설문조사 운영 지원",
-            "연수 대상자 정보 등록 처리 필수",
-            "모듈별 참여자 집계 및 전달",
-            "참여 후기 수집 지원",
-            "연수 후 학교 변화 모니터링 자문"
+          subLabel("참여 교원 (* 필수 기재)"),
+          table(
+            [["", "성명 *", "직책 *", "담당교과 *", "교육경력", "연락처 (이메일/내선 등)"]],
+            interview.teachers.map((teacher, index) => [
+              circledNumbers[index] ?? String(index + 1),
+              teacher.name,
+              teacher.role,
+              teacher.subject,
+              teacher.career,
+              teacher.contact
+            ]),
+            [6, 20, 22, 16, 12, 24]
+          ),
+
+          section("Ⅱ. 학교 일반사항 및 인프라 현황"),
+          kvTable([
+            ["학교명", schoolName],
+            ["권역", school.region],
+            ["소재지", school.address],
+            ["학교급", [school.schoolLevel, school.establishment, school.schoolCharacter].filter(Boolean).join(" / ")],
+            ["선도학교", school.leadingSchool ? `선도학교 ${school.leadingSchool}` : ""],
+            ["교원 수", school.teacherCount],
+            ["교직원 수", school.staffCount],
+            ["학급 수", school.classCount],
+            ["학생 수", school.studentCount],
+            ["교사용 기기 유형", [...school.teacherDeviceTypes, school.teacherDeviceEtc && `기타: ${school.teacherDeviceEtc}`].filter(Boolean).join(", ")],
+            ["학생 1인당 보급 비율", school.studentDeviceRatio],
+            ["기술적 애로사항", [...school.technicalIssues, school.technicalIssueEtc && `기타: ${school.technicalIssueEtc}`].filter(Boolean).join(", ")],
+            ["디지털 교육 전환 관련 학교 예산 집행 현황", school.budgetStatus],
+            ["기타 시설 및 인프라 관련 학교 특이사항", school.infrastructureNotes]
           ]),
-          section("희망 연수 일정 및 모듈 구성"),
-          moduleTable(state.modules.filter((module) => module.selected)),
-          section("최종 학교 스케줄표"),
-          scheduleTable(state.modules.filter((module) => module.selected), schoolName),
-          section("면담 전사"),
-          body(state.interview.transcript || " "),
-          section("기타 고려사항"),
-          body(state.interview.notes || " ")
+
+          section("Ⅲ. 연수 참여 목표 및 학교의 변화 방향"),
+          note("(인터뷰 방향) 본 사업 종료 후, 지속해서 이어가고자 하는 학교의 목표 점검"),
+          kvTable([
+            ...goalOptions.map((option): [string, string] => [interview.goals.includes(option) ? "[■]" : "[  ]", option]),
+            [interview.goalEtc ? "[■]" : "[  ]", `기타 : ${interview.goalEtc}`]
+          ], 10),
+
+          section("Ⅳ. 교직원 디지털 친화도 및 역량 진단"),
+          note("(인터뷰 방향) 인터뷰 대상자가 대답할 수 있는 사항 안에서 작성, 정확한 정보로 인식하지 않는다고 표현"),
+          kvTable([
+            ["구성원 디지털 활용 역량", checkboxLine(capabilityOptions, interview.digitalCapability)],
+            ["디지털 교육 혁신 반응", checkboxLine(reactionOptions, interview.digitalReaction)],
+            ["기타 디지털 친화도 및 개별 역량 관련 의견", interview.digitalNotes]
+          ], 30),
+
+          section("Ⅴ. 희망 연수 일정 및 모듈 구성"),
+          note("필수모듈(2차시) 및 선택 모듈(3개 모듈 이상) 총 12차시 이상 구성 필수"),
+          subLabel("① 희망 모듈 선정"),
+          table(
+            [["구분", "모듈", "대상", "선택"]],
+            modules.map((module) => [
+              module.required ? "필수모듈 (1차시)" : "선택모듈",
+              `모듈${module.id} ${module.name}`,
+              module.target,
+              module.selected ? "선택" : "-"
+            ]),
+            [18, 46, 18, 18]
+          ),
+          subLabel("② 맞춤형 연수 기획"),
+          table(
+            [["모듈 구성", "차시 구성", "연수 일정", "연수 방법", "중점 도구", "운영 주제", "비고"]],
+            selected.map((module) => [
+              `과정 ${module.id}`,
+              String(module.hours),
+              [module.date, module.time].filter(Boolean).join(" "),
+              module.method === "온라인" ? "온라인" : "강의/토론·실습(오프라인)",
+              module.mainTool,
+              module.topic,
+              module.note
+            ]),
+            [12, 10, 18, 16, 14, 20, 10]
+          ),
+          subLabel("③ 기타 고려사항"),
+          table(
+            [["구분", "세부내용"]],
+            [
+              ["선행 수준 확인", interview.priorLevel],
+              ["인프라 환경 (인적/물적) 고려사항", interview.infraConsiderations],
+              ["학교 측 별도 요청사항", interview.schoolRequests],
+              ["기타 확인 필요사항", interview.additionalChecks]
+            ],
+            [28, 72]
+          ),
+
+          section("Ⅵ. 심층면담 결과 핵심 요약"),
+          note("(작성 방향) 전체 면담 결과 분석, 논의 주요 사항 및 학교 목표, 방향성에 대한 코멘트"),
+          table(
+            [["핵심 사항 요약", ""]],
+            [
+              ["면담 대상 학교의 연수 참여 목표", interview.participationGoal],
+              ["면담 핵심 결과", interview.resultSummary]
+            ],
+            [28, 72]
+          ),
+          note("※ 심층면담 운영시 현장 사진 및 회의 참여자 서명부 수령 필수 (간식 제공 증빙자료)"),
+
+          ...(interview.transcript
+            ? [section("[참고] 면담 전사 기록"), ...bodyParagraphs(interview.transcript)]
+            : []),
+
+          note(`서류 제출처 : ${submissionEmail}`)
         ]
       }
     ]
@@ -53,39 +165,190 @@ export async function downloadInterviewDocx(state: AppState) {
   await saveDocument(doc, `${schoolName}_심층면담지_${today()}.docx`);
 }
 
+// ─────────────────────────────────────────────
+// 운영계획서: 운영계획서.pdf 섹션 순서 그대로 생성
+// ─────────────────────────────────────────────
 export async function downloadPlanDocx(state: AppState) {
   const schoolName = state.project?.schoolName ?? "새학교";
+  const { interview, plan, modules } = state;
   const insights = buildInsights(state.project?.moduleScores ?? []);
+  const selected = modules.filter((module) => module.selected);
+
   const doc = new Document({
     sections: [
       {
         children: [
-          title(`${schoolName} 운영계획서`),
-          section("Ⅰ. 우리학교 디지털 기반 교육 현황 알아보기"),
-          body(state.plan.editedInsights || insights.draft),
-          scoreTable(state.project?.moduleScores ?? [], state.plan.diagnosisImplications ?? {}),
-          section("단계별 설명"),
-          kvTable(Object.entries(stageDescriptions) as [string, string][]),
-          section("Ⅱ. 강점과 도전 과제"),
+          title(`${schoolName} 맞춤형 연수 운영계획서`),
+
+          section("Ⅰ. 우리학교 디지털 기반 교육 현황 알아보기 – 자가진단설문조사 데이터 활용 작성"),
+          ...bodyParagraphs(plan.editedInsights || insights.draft),
+          ...infrastructureBlocks(state),
+          subLabel("사전 진단 – 과정별 진단 분석 결과"),
+          table(
+            [["구분", "평균 점수", "단계", "자가 진단 분석 결과", "시사점"]],
+            (state.project?.moduleScores ?? []).map((score) => [
+              `모듈${score.moduleId} ${score.moduleName}`,
+              score.score.toFixed(2),
+              score.stage,
+              score.question || `${score.moduleName} 평균 ${score.score.toFixed(2)}점`,
+              plan.diagnosisImplications?.[String(score.moduleId)] ?? ""
+            ]),
+            [22, 10, 8, 30, 30]
+          ),
+          table(
+            [["도약 단계", "만족 단계", "추월 단계"]],
+            [
+              ["3.8점 미만", "3.8점 – 4.6점 구간", "4.6점 이상"],
+              [stageDescriptions["도약"], stageDescriptions["만족"], stageDescriptions["추월"]]
+            ],
+            [34, 33, 33]
+          ),
+
+          section("Ⅱ. 우리학교 강점과 디지털 기반 교육 혁신을 위한 도전 과제"),
+          table(
+            [["구분", "내용"]],
+            [
+              ["강점 01", plan.strength1 || plan.strengths],
+              ["강점 02", plan.strength2],
+              ["과제 01", plan.challenge1 || plan.challenges],
+              ["과제 02", plan.challenge2]
+            ],
+            [14, 86]
+          ),
+
+          section("Ⅲ-1. 심층면담(1차) 결과 핵심 요약"),
           kvTable([
-            ["우리학교 강점 1", state.plan.strength1 || state.plan.strengths],
-            ["우리학교 강점 2", state.plan.strength2 || " "],
-            ["도전 과제 1", state.plan.challenge1 || state.plan.challenges],
-            ["도전 과제 2", state.plan.challenge2 || " "]
+            ["심층면담 일시", interview.dateTime],
+            ["리더 코디네이터", interview.leadCoordinator],
+            ["코디네이터", interview.coordinator2],
+            ["코디네이터", interview.coordinator3]
           ]),
-          section("Ⅲ. 심층면담 결과 핵심 요약"),
-          body(state.plan.interviewSummary || state.interview.resultSummary || " "),
-          section("Ⅳ. 우리학교 디지털 혁신 로드맵"),
-          moduleTable(state.modules.filter((module) => module.selected)),
-          section("Ⅴ. 최종 학교 스케줄표"),
-          scheduleTable(state.modules.filter((module) => module.selected), schoolName),
-          section("과정별 기대효과"),
-          body(state.plan.roadmapNotes || " ")
+          subLabel("참여 교원 (* 필수 기재)"),
+          table(
+            [["", "성명 *", "직책 *", "담당교과 *", "교육경력", "연락처"]],
+            interview.teachers.map((teacher, index) => [
+              circledNumbers[index] ?? String(index + 1),
+              teacher.name,
+              teacher.role,
+              teacher.subject,
+              teacher.career,
+              teacher.contact
+            ]),
+            [6, 20, 22, 16, 12, 24]
+          ),
+          subLabel("참여 목표 및 변화 희망 방향"),
+          kvTable([
+            ...goalOptions.map((option): [string, string] => [interview.goals.includes(option) ? "[■]" : "[  ]", option]),
+            [interview.goalEtc ? "[■]" : "[  ]", `기타 : ${interview.goalEtc}`]
+          ], 10),
+          subLabel("연수 구성 계획"),
+          table(
+            [modules.map((module) => `모듈 ${module.id}`)],
+            [modules.map((module) => (module.required ? "필수" : module.selected ? "구성" : "-"))],
+            modules.map(() => Math.floor(100 / modules.length))
+          ),
+          kvTable([
+            ["면담 대상 학교의 연수 참여 목표", interview.participationGoal],
+            ["면담 핵심 결과", plan.interviewSummary || interview.resultSummary]
+          ], 28),
+
+          section("Ⅲ-2. 심층면담(2차 이상) 결과 핵심 요약"),
+          note("※ 2차 후속면담을 Zoom(온라인)으로 진행한 경우 활동 사진을 반드시 별도 첨부해 주세요."),
+          kvTable([
+            ["심층면담 일시", plan.secondInterview.dateTime],
+            ["면담 핵심 결과", plan.secondInterview.resultSummary],
+            ["향후 예정사항", plan.secondInterview.futurePlans]
+          ], 22),
+
+          section("Ⅳ. 심층면담 결과 몰아보기 – 이슈 → 목표 도출"),
+          table(
+            [["구분", "이슈 (우리학교 목소리)", "목표"]],
+            plan.issueGoals.map((item, index) => [`이슈 0${index + 1}`, item.issue, item.goal]),
+            [12, 44, 44]
+          ),
+          kvTable([["우리학교 혁신 로드맵 방향", plan.roadmapDirection]], 28),
+
+          section("Ⅴ-1. 우리학교 디지털 혁신 로드맵 – 과정별 세부 프로그램 계획"),
+          table(
+            [["모듈", "진단 점수", "우리학교 목소리", "프로그램명", "차시", "주요 내용"]],
+            modules.map((module) => {
+              const score = state.project?.moduleScores.find((item) => item.moduleId === module.id);
+              return [
+                `모듈 ${module.id}`,
+                score ? score.score.toFixed(2) : "",
+                module.selected ? module.schoolVoice : "",
+                module.selected ? module.programName : "미구성",
+                module.selected ? String(module.hours) : "-",
+                module.selected ? module.editableProgram || module.defaultProgram : ""
+              ];
+            }),
+            [8, 9, 22, 18, 7, 36]
+          ),
+
+          section("Ⅴ-2. 우리학교 디지털 혁신 로드맵 – 우리학교 맞춤형 프로그램 계획(안)"),
+          table(
+            [["모듈", "프로그램명", "일정", "장소", "방법", "인원", "차시", "회차", "기대효과"]],
+            selected.map((module) => [
+              `모듈 ${module.id}`,
+              module.programName || module.name,
+              module.date,
+              module.place || schoolName,
+              module.method === "온라인" ? "온라인" : "강의토론/실습",
+              module.headcount,
+              String(module.hours),
+              module.sessionRound,
+              module.expectedEffect
+            ]),
+            [8, 18, 10, 10, 10, 7, 6, 6, 25]
+          ),
+
+          section("과정별 기대효과 및 종합 의견"),
+          ...bodyParagraphs(plan.roadmapNotes || " "),
+
+          section("작성 후 제출 방법"),
+          note(`서류 제출처 : ${submissionEmail} (리더 코디네이터는 면담일 기준 1차 초안을 운영기관 메일로 제출)`)
         ]
       }
     ]
   });
   await saveDocument(doc, `${schoolName}_운영계획서_${today()}.docx`);
+}
+
+// ─────────────────────────────────────────────
+// 공통 빌더
+// ─────────────────────────────────────────────
+
+function infrastructureBlocks(state: AppState) {
+  const distributions = state.project?.infrastructureDistributions ?? [];
+  const openEnded = state.project?.openEndedQuestions ?? [];
+  if (distributions.length === 0 && openEnded.length === 0) return [];
+
+  const blocks: (Paragraph | Table)[] = [];
+  if (distributions.length > 0) {
+    blocks.push(subLabel("디지털 기반 교육 현황 – 문항별 응답 분포"));
+    blocks.push(
+      table(
+        [["문항", "응답", "비율"]],
+        distributions.flatMap((question) =>
+          question.options.map((option, index) => [
+            index === 0 ? question.question : "",
+            option.label,
+            `${option.ratio.toFixed(1)}%`
+          ])
+        ),
+        [34, 52, 14]
+      )
+    );
+  }
+  for (const question of openEnded) {
+    blocks.push(subLabel(question.question));
+    blocks.push(...bullets(question.responses.length > 0 ? question.responses : [" "]));
+  }
+  return blocks;
+}
+
+function checkboxLine(options: readonly string[], value: string) {
+  return options.map((option) => `${value === option ? "[■]" : "[  ]"} ${option}`).join("   ");
 }
 
 function title(text: string) {
@@ -98,16 +361,35 @@ function title(text: string) {
 
 function section(text: string) {
   return new Paragraph({
-    spacing: { before: 280, after: 120 },
+    spacing: { before: 300, after: 120 },
     children: [new TextRun({ text, bold: true, size: 24, color: navy })]
   });
 }
 
-function body(text: string) {
+function subLabel(text: string) {
   return new Paragraph({
-    spacing: { after: 140 },
-    children: [new TextRun({ text, size: 20 })]
+    spacing: { before: 180, after: 90 },
+    children: [new TextRun({ text, bold: true, size: 20, color: navy })]
   });
+}
+
+function note(text: string) {
+  return new Paragraph({
+    spacing: { after: 120 },
+    children: [new TextRun({ text, size: 18, color: "5B6472" })]
+  });
+}
+
+function bodyParagraphs(text: string) {
+  const paragraphs = String(text ?? "").split(/\n+/).filter((line) => line.trim().length > 0);
+  if (paragraphs.length === 0) paragraphs.push(" ");
+  return paragraphs.map(
+    (line) =>
+      new Paragraph({
+        spacing: { after: 140 },
+        children: [new TextRun({ text: line, size: 20 })]
+      })
+  );
 }
 
 function bullets(items: string[]) {
@@ -120,87 +402,32 @@ function bullets(items: string[]) {
   );
 }
 
-function kvTable(rows: [string, string][]) {
+function kvTable(rows: [string, string][], labelWidth = 25) {
   return new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
     rows: rows.map(
       ([label, value]) =>
         new TableRow({
-          children: [
-            cell(label, true, 25),
-            cell(value || " ", false, 75)
-          ]
+          children: [cell(label, true, labelWidth), cell(value || " ", false, 100 - labelWidth)]
         })
     )
   });
 }
 
-function moduleTable(modules: TrainingModule[]) {
+function table(headerRows: string[][], bodyRows: string[][], widths?: number[]) {
   return new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
     rows: [
-      new TableRow({
-        children: ["과정", "차시", "대상", "일정", "세부 프로그램", "기대효과"].map((label) => cell(label, true))
-      }),
-      ...modules.map(
-        (module) =>
+      ...headerRows.map(
+        (row) =>
           new TableRow({
-            children: [
-              cell(`${module.id}. ${module.name}`),
-              cell(String(module.hours)),
-              cell(module.target),
-              cell([module.date, module.time, module.place].filter(Boolean).join(" / ")),
-              cell(module.editableProgram || module.defaultProgram || module.topic),
-              cell(module.expectedEffect)
-            ]
+            children: row.map((label, index) => cell(label, true, widths?.[index]))
           })
-      )
-    ]
-  });
-}
-
-function scheduleTable(modules: TrainingModule[], schoolName: string) {
-  return new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    rows: [
-      new TableRow({
-        children: ["순번", "과정", "대상", "차시", "일정", "시간", "장소", "방식", "희망 주제"].map((label) => cell(label, true))
-      }),
-      ...modules.map(
-        (module, index) =>
+      ),
+      ...bodyRows.map(
+        (row) =>
           new TableRow({
-            children: [
-              cell(String(index + 1)),
-              cell(`${module.id}. ${module.name}`),
-              cell(module.target),
-              cell(`${module.hours}차시`),
-              cell(module.date || "학교 확인 필요"),
-              cell(module.time || "학교 확인 필요"),
-              cell(module.place || schoolName),
-              cell(module.method),
-              cell(module.topic || "학교 확인 필요")
-            ]
-          })
-      )
-    ]
-  });
-}
-
-function scoreTable(scores: NonNullable<AppState["project"]>["moduleScores"], implications: Record<string, string>) {
-  return new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    rows: [
-      new TableRow({ children: ["구분", "평균 점수", "단계", "자가 진단 분석 결과", "시사점"].map((label) => cell(label, true)) }),
-      ...scores.map(
-        (score) =>
-          new TableRow({
-            children: [
-              cell(`모듈${score.moduleId} ${score.moduleName}`),
-              cell(score.score.toFixed(2)),
-              cell(score.stage),
-              cell(score.question || `${score.moduleName} 평균 ${score.score.toFixed(2)}점`),
-              cell(implications[String(score.moduleId)] || "AI 심층 분석 후 작성")
-            ]
+            children: row.map((value, index) => cell(value, false, widths?.[index]))
           })
       )
     ]
@@ -211,6 +438,7 @@ function cell(text: string, header = false, width?: number) {
   return new TableCell({
     shading: header ? { fill: gray } : undefined,
     width: width ? { size: width, type: WidthType.PERCENTAGE } : undefined,
+    verticalAlign: VerticalAlign.CENTER,
     borders: {
       top: { style: BorderStyle.SINGLE, size: 1, color: "C9D0DA" },
       bottom: { style: BorderStyle.SINGLE, size: 1, color: "C9D0DA" },
@@ -218,11 +446,15 @@ function cell(text: string, header = false, width?: number) {
       right: { style: BorderStyle.SINGLE, size: 1, color: "C9D0DA" }
     },
     margins: { top: 90, bottom: 90, left: 120, right: 120 },
-    children: [
-      new Paragraph({
-        children: [new TextRun({ text: text || " ", bold: header, size: 18, color: header ? navy : "111827" })]
-      })
-    ]
+    children: String(text ?? " ")
+      .split(/\n+/)
+      .filter((line, index) => index === 0 || line.trim().length > 0)
+      .map(
+        (line) =>
+          new Paragraph({
+            children: [new TextRun({ text: line || " ", bold: header, size: 18, color: header ? navy : "111827" })]
+          })
+      )
   });
 }
 
