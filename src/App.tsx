@@ -59,6 +59,7 @@ export default function App() {
   const [recordingStatus, setRecordingStatus] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [showHelp, setShowHelp] = useState(true);
+  const [showTranscript, setShowTranscript] = useState(false);
   const [completionNotice, setCompletionNotice] = useState<{ title: string; detail: string } | null>(null);
   const [toastNotice, setToastNotice] = useState<{ tone: "ok" | "error"; message: string } | null>(null);
 
@@ -614,12 +615,28 @@ export default function App() {
         </nav>
         <div className="sidebarFooter">
           <div className="sidebarRecording">
-            <strong>면담 녹음</strong>
-            <button className={isRecording ? "resetButton recordingActive" : "resetButton"} onClick={isRecording ? stopInterviewRecording : startInterviewRecording}>
-              {isRecording ? <Square size={16} /> : <Mic size={16} />}
-              {isRecording ? "녹음 종료" : "녹음 시작"}
-            </button>
+            <div className="recordingHeader">
+              <strong>면담 녹음</strong>
+              <button className="transcriptToggle" onClick={() => setShowTranscript((value) => !value)} type="button">
+                {showTranscript ? "전사 닫기" : "전사 보기"}
+              </button>
+            </div>
+            <div className="recordingActions">
+              <button className={isRecording ? "resetButton recordingActive" : "resetButton"} onClick={isRecording ? stopInterviewRecording : startInterviewRecording}>
+                {isRecording ? <Square size={16} /> : <Mic size={16} />}
+                {isRecording ? "녹음 종료" : "녹음 시작"}
+              </button>
+            </div>
             <span>{recordingStatus || (state.interview.transcript ? "전사 내용이 AI 초안에 반영됩니다." : "녹음 후 전사 내용이 AI 초안에 반영됩니다.")}</span>
+            {showTranscript && (
+              <div className="transcriptPanel">
+                <textarea
+                  value={state.interview.transcript}
+                  onChange={(event) => patchInterview({ transcript: event.target.value })}
+                  placeholder="녹음 종료 후 전사 내용이 여기에 표시됩니다. 필요한 경우 직접 수정할 수 있습니다."
+                />
+              </div>
+            )}
           </div>
           <div className="sidebarFileTools">
             <strong>작업 파일 관리</strong>
