@@ -37,7 +37,8 @@ const initialState: AppState = {
     challenges: "",
     interviewSummary: "",
     roadmapNotes: "",
-    editedInsights: ""
+    editedInsights: "",
+    insightSource: "basic"
   },
   updatedAt: new Date().toISOString()
 };
@@ -78,6 +79,8 @@ export default function App() {
   const insights = useMemo(() => buildInsights(state.project?.moduleScores ?? []), [state.project]);
   const validations = useMemo(() => validateModules(state.modules), [state.modules]);
   const selectedModules = useMemo(() => state.modules.filter((module) => module.selected), [state.modules]);
+  const diagnosisSummary = state.plan.editedInsights || insights.draft;
+  const insightSourceLabel = state.plan.insightSource === "ai" ? "AI 심층 분석" : state.plan.insightSource === "edited" ? "수정된 분석 초안" : "기본 CSV 분석";
   const selectedHours = state.modules.filter((module) => module.selected).reduce((sum, module) => sum + module.hours, 0);
   const errorCount = validations.filter((item) => item.level === "error").length;
 
@@ -104,7 +107,8 @@ export default function App() {
         },
         plan: {
           ...current.plan,
-          editedInsights: buildInsights(project.moduleScores).draft
+          editedInsights: buildInsights(project.moduleScores).draft,
+          insightSource: "basic"
         }
       }));
       setUploadStatus(`${project.schoolName} 분석 완료`);
@@ -192,6 +196,7 @@ export default function App() {
           plan: {
             ...current.plan,
             editedInsights: draft.diagnosisInsight ?? current.plan.editedInsights,
+            insightSource: draft.diagnosisInsight ? "ai" : current.plan.insightSource,
             strengths: draft.strengths ?? current.plan.strengths,
             challenges: draft.challenges ?? current.plan.challenges,
             interviewSummary: draft.interviewSummary ?? current.plan.interviewSummary,
@@ -319,9 +324,9 @@ export default function App() {
           <section className="grid">
             <article className="panel heroPanel">
               <div>
-                <p className="eyebrow">진단 요약</p>
+                <p className="eyebrow">{insightSourceLabel}</p>
                 <h2>{insights.average ? `${insights.average.toFixed(2)}점` : "CSV를 업로드하세요"}</h2>
-                <p>{insights.draft}</p>
+                <p>{diagnosisSummary}</p>
                 <button className="button primary inlineAction" onClick={() => runAiDraft("diagnosis")}>
                   <Sparkles size={17} />
                   AI로 심층 분석
@@ -365,7 +370,7 @@ export default function App() {
               <h2>분석 초안 편집</h2>
               <textarea
                 value={state.plan.editedInsights}
-                onChange={(event) => patchState({ plan: { ...state.plan, editedInsights: event.target.value } })}
+                onChange={(event) => patchState({ plan: { ...state.plan, editedInsights: event.target.value, insightSource: "edited" } })}
                 placeholder="CSV 업로드 후 운영계획서에 반영할 분석 초안을 편집하세요."
               />
             </article>

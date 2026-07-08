@@ -70,6 +70,7 @@ export type AppState = {
     interviewSummary: string;
     roadmapNotes: string;
     editedInsights: string;
+    insightSource?: "basic" | "ai" | "edited";
   };
   updatedAt: string;
 };
