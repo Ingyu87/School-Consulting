@@ -18,6 +18,13 @@ export function validateModules(modules: TrainingModule[]): ValidationItem[] {
   const teacherHours = selected
     .filter((module) => ["교원", "교직원", "학교 관리자"].includes(module.target))
     .reduce((sum, module) => sum + module.hours, 0);
+  const requiredZero = modules.find((module) => module.id === 0);
+  const requiredSeven = modules.find((module) => module.id === 7);
+  const requiredModulesValid =
+    requiredZero?.selected === true &&
+    requiredSeven?.selected === true &&
+    requiredZero.hours === 1 &&
+    requiredSeven.hours === 1;
 
   return [
     {
@@ -33,7 +40,7 @@ export function validateModules(modules: TrainingModule[]): ValidationItem[] {
       message: `필수 포함 총 ${totalHours}차시: 최대 17차시 이하여야 합니다.`
     },
     {
-      level: modules.find((module) => module.id === 0)?.selected && modules.find((module) => module.id === 7)?.selected ? "ok" : "error",
+      level: requiredModulesValid ? "ok" : "error",
       message: "필수 과정 0과 7은 각각 1차시로 포함되어야 합니다."
     },
     {

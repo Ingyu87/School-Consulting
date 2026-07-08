@@ -40,6 +40,8 @@ export async function downloadInterviewDocx(state: AppState) {
           ]),
           section("희망 연수 일정 및 모듈 구성"),
           moduleTable(state.modules.filter((module) => module.selected)),
+          section("최종 학교 스케줄표"),
+          scheduleTable(state.modules.filter((module) => module.selected), schoolName),
           section("기타 고려사항"),
           body(state.interview.notes || " ")
         ]
@@ -69,6 +71,8 @@ export async function downloadPlanDocx(state: AppState) {
           body(state.plan.interviewSummary || state.interview.resultSummary || " "),
           section("Ⅳ. 우리학교 디지털 혁신 로드맵"),
           moduleTable(state.modules.filter((module) => module.selected)),
+          section("Ⅴ. 최종 학교 스케줄표"),
+          scheduleTable(state.modules.filter((module) => module.selected), schoolName),
           section("과정별 기대효과"),
           body(state.plan.roadmapNotes || " ")
         ]
@@ -142,6 +146,33 @@ function moduleTable(modules: TrainingModule[]) {
               cell([module.date, module.time, module.place].filter(Boolean).join(" / ")),
               cell(module.editableProgram || module.defaultProgram || module.topic),
               cell(module.expectedEffect)
+            ]
+          })
+      )
+    ]
+  });
+}
+
+function scheduleTable(modules: TrainingModule[], schoolName: string) {
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: [
+      new TableRow({
+        children: ["순번", "과정", "대상", "차시", "일정", "시간", "장소", "방식", "희망 주제"].map((label) => cell(label, true))
+      }),
+      ...modules.map(
+        (module, index) =>
+          new TableRow({
+            children: [
+              cell(String(index + 1)),
+              cell(`${module.id}. ${module.name}`),
+              cell(module.target),
+              cell(`${module.hours}차시`),
+              cell(module.date || "학교 확인 필요"),
+              cell(module.time || "학교 확인 필요"),
+              cell(module.place || schoolName),
+              cell(module.method),
+              cell(module.topic || "학교 확인 필요")
             ]
           })
       )

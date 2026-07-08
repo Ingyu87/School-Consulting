@@ -73,3 +73,38 @@ export type AppState = {
   };
   updatedAt: string;
 };
+
+export type AiDraftRequest = {
+  task: "diagnosis" | "interview-plan" | "training-plan";
+  schoolName: string;
+  project: ParsedDiagnosisProject | null;
+  modules: TrainingModule[];
+  interview: AppState["interview"];
+  plan: AppState["plan"];
+};
+
+export type AiModuleUpdate = {
+  id: number;
+  selected?: boolean;
+  hours?: number;
+  date?: string;
+  time?: string;
+  place?: string;
+  method?: TrainingModule["method"];
+  topic?: string;
+  editableProgram?: string;
+  expectedEffect?: string;
+  materials?: string;
+};
+
+export type AiDraftResponse = {
+  diagnosisInsight?: string;
+  strengths?: string;
+  challenges?: string;
+  interviewNotes?: string;
+  interviewResultSummary?: string;
+  interviewSummary?: string;
+  roadmapNotes?: string;
+  moduleUpdates?: AiModuleUpdate[];
+  warnings?: string[];
+};

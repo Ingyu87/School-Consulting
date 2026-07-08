@@ -36,10 +36,16 @@ h2 { margin: 0 0 16px; font-size: 19px; color: var(--navy); }
 .button { min-height: 42px; display: inline-flex; align-items: center; gap: 8px; border-radius: 8px; border: 1px solid var(--line); padding: 0 14px; background: #fff; cursor: pointer; color: var(--ink); }
 .button.primary { background: var(--blue); color: #fff; border-color: var(--blue); }
 .button.ghost input { display: none; }
+.button.compact { min-height: 36px; padding: 0 11px; font-size: 13px; }
 .validationStrip { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; background: #fff; border: 1px solid var(--line); padding: 12px 16px; margin-bottom: 14px; border-left: 5px solid var(--blue); }
 .danger { color: #dc2626; font-weight: 800; }
 .ok { color: var(--green); font-weight: 800; }
 .notice { margin-bottom: 14px; padding: 12px 14px; background: #e0f2fe; border: 1px solid #7dd3fc; color: #075985; }
+.aiNotice { display: flex; align-items: center; gap: 8px; background: #eef2ff; border-color: #a5b4fc; color: #3730a3; }
+.scheduleNotice { display: flex; align-items: center; gap: 8px; background: #ecfdf5; border-color: #86efac; color: #166534; }
+.inlineAction { margin-top: 14px; }
+.sectionToolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
+.sectionToolbar h2 { margin: 0; }
 .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 20px; box-shadow: 0 10px 22px rgba(15, 23, 42, .04); animation: rise .32s ease both; }
 .wide { grid-column: 1 / -1; }
@@ -64,6 +70,9 @@ textarea { width: 100%; min-height: 140px; resize: vertical; border: 1px solid v
 .field input, .moduleGrid input, .moduleGrid select { width: 100%; border: 1px solid var(--line); border-radius: 8px; min-height: 40px; padding: 8px 10px; background: #fff; }
 .moduleLayout { display: grid; grid-template-columns: 1fr 360px; gap: 16px; align-items: start; }
 .moduleCards { display: grid; gap: 12px; }
+.moduleAiPanel { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.moduleAiPanel h2 { margin-bottom: 8px; }
+.moduleAiPanel p:last-child { margin: 0; color: var(--muted); line-height: 1.55; }
 .moduleCard { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 16px; transition: border-color .18s ease, box-shadow .18s ease; }
 .moduleCard.selected { border-color: #9db3ef; box-shadow: 0 10px 24px rgba(31, 74, 168, .08); }
 .moduleHead { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 12px; }
@@ -85,6 +94,20 @@ textarea { width: 100%; min-height: 140px; resize: vertical; border: 1px solid v
 .rule.error { color: #b91c1c; font-weight: 700; }
 .downloadCard { min-height: 240px; display: grid; align-content: start; gap: 10px; }
 .downloadCard svg { color: var(--blue); }
+.workFileCard { display: flex; align-items: center; justify-content: space-between; gap: 18px; background: #fbfdff; }
+.workFileCard h2 { margin-bottom: 8px; }
+.workFileCard p:last-child { margin: 0; color: var(--muted); line-height: 1.55; }
+.workFileActions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.workFileActions input { display: none; }
+.tableScroller { width: 100%; overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+.scheduleTable { width: 100%; min-width: 1120px; border-collapse: collapse; background: #fff; }
+.scheduleTable th, .scheduleTable td { border: 1px solid var(--line); padding: 10px 11px; text-align: left; vertical-align: top; font-size: 14px; line-height: 1.45; }
+.scheduleTable th { background: var(--navy); color: #fff; font-weight: 700; white-space: nowrap; }
+.scheduleTable td:first-child, .scheduleTable td:nth-child(4), .scheduleTable td:nth-child(8) { text-align: center; white-space: nowrap; }
+.scheduleTable tbody tr:nth-child(even) { background: #f8fafc; }
+.emptyText { margin: 0; color: var(--muted); }
+.optionalImport { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 12px; color: var(--muted); font-size: 13px; }
+.optionalImport span { max-width: 360px; text-align: right; line-height: 1.45; }
 
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes fillBar { from { width: 0; } }
@@ -96,6 +119,10 @@ textarea { width: 100%; min-height: 140px; resize: vertical; border: 1px solid v
   .moduleLayout, .grid { grid-template-columns: 1fr; }
   .moduleGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .programEditor { grid-template-columns: 1fr; }
+  .workFileCard { align-items: flex-start; flex-direction: column; }
+  .workFileActions { justify-content: flex-start; }
+  .optionalImport { justify-content: flex-start; align-items: flex-start; flex-direction: column; }
+  .optionalImport span { text-align: left; }
 }
 
 @media (prefers-reduced-motion: reduce) {
