@@ -7,6 +7,7 @@ import {
   Paragraph,
   Table,
   TableCell,
+  TableLayoutType,
   TableRow,
   TextRun,
   VerticalAlign,
@@ -38,6 +39,11 @@ export async function downloadInterviewDocx(state: AppState) {
   const doc = new Document({
     sections: [
       {
+        properties: {
+          page: {
+            margin: { top: 900, right: 720, bottom: 900, left: 720 }
+          }
+        },
         children: [
           title(`${schoolName} 찾아가는 학교 컨설팅 심층면담지`),
           section("[필수 안내] 학교 연수담당자 역할 사전 안내 및 동의 확인 / 코디네이터 셀프 점검"),
@@ -177,6 +183,11 @@ export async function downloadPlanDocx(state: AppState) {
   const doc = new Document({
     sections: [
       {
+        properties: {
+          page: {
+            margin: { top: 900, right: 720, bottom: 900, left: 720 }
+          }
+        },
         children: [
           title(`${schoolName} 맞춤형 연수 운영계획서`),
 
@@ -405,6 +416,7 @@ function bullets(items: string[]) {
 function kvTable(rows: [string, string][], labelWidth = 25) {
   return new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
+    layout: TableLayoutType.AUTOFIT,
     rows: rows.map(
       ([label, value]) =>
         new TableRow({
@@ -417,6 +429,7 @@ function kvTable(rows: [string, string][], labelWidth = 25) {
 function table(headerRows: string[][], bodyRows: string[][], widths?: number[]) {
   return new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
+    layout: TableLayoutType.AUTOFIT,
     rows: [
       ...headerRows.map(
         (row) =>
@@ -445,14 +458,14 @@ function cell(text: string, header = false, width?: number) {
       left: { style: BorderStyle.SINGLE, size: 1, color: "C9D0DA" },
       right: { style: BorderStyle.SINGLE, size: 1, color: "C9D0DA" }
     },
-    margins: { top: 90, bottom: 90, left: 120, right: 120 },
+    margins: { top: 80, bottom: 80, left: 90, right: 90 },
     children: String(text ?? " ")
       .split(/\n+/)
       .filter((line, index) => index === 0 || line.trim().length > 0)
       .map(
         (line) =>
           new Paragraph({
-            children: [new TextRun({ text: line || " ", bold: header, size: 18, color: header ? navy : "111827" })]
+            children: [new TextRun({ text: line || " ", bold: header, size: header ? 17 : 18, color: header ? navy : "111827" })]
           })
       )
   });

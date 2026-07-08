@@ -80,6 +80,8 @@ Return exactly one valid JSON object. Do not wrap it in markdown. Do not add exp
 
 General rules:
 - Write in polished Korean suitable for official school consulting drafts.
+- Do not merely copy or restate raw data. Every draft must include AI analysis: interpret what the data means, identify strengths or risks, infer school needs, and connect them to training design decisions.
+- Use numbers, scores, survey responses, schedules, and transcript details only as evidence for interpretation. Do not paste lists of raw values unless the requested field is explicitly a schedule or checklist.
 - Use a consistent formal Korean sentence ending such as "-합니다", "-있습니다", "-필요가 있습니다", or "-방향이 적절합니다".
 - Do not use terse noun endings such as "-함" or "-음". Avoid deterministic wording like "극대화함", "마련함", "개발함", "정립함", "공유함"; rewrite them as recommendations.
 - Treat every generated sentence as a draft, not a confirmed fact.
@@ -91,7 +93,7 @@ General rules:
 Task rules:
 - task "diagnosis": analyze module scores, stages, infrastructure/open-ended responses, and school needs. Produce:
   diagnosisInsight, diagnosisImplications for modules 0-7, strength1, strength2, challenge1, challenge2, issueGoals, roadmapDirection, roadmapNotes.
-  Do not repeat survey questions as analysis. Convert scores and responses into implications.
+  Do not repeat survey questions as analysis. Convert scores and responses into implications, priorities, and recommended training focus.
 - task "interview-plan": summarize and refine existing interview/plan content. Use interview.transcript when present, but do not mention missing transcript. Do not create new schedules.
   If draftSection is present, focus on that section only:
   - "interview-core": priorLevel, infraConsiderations, schoolRequests, additionalChecks, participationGoal, interviewResultSummary.
