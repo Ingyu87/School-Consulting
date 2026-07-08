@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  AlertCircle,
   BarChart3,
   CalendarDays,
   CheckCircle2,
@@ -16,8 +17,11 @@ import {
   Upload
 } from "lucide-react";
 import { InterviewFormView } from "./components/InterviewFormView";
+import { LottiePlayer } from "./components/LottiePlayer";
 import { PlanFormView } from "./components/PlanFormView";
 import { SchoolInfoForm } from "./components/SchoolInfoForm";
+import aiProcessingLoader from "./assets/ai-processing-loader.json";
+import generationComplete from "./assets/generation-complete.json";
 import { generateAiDraft } from "./lib/ai";
 import { summarizeInterviewTranscript, transcribeInterviewSegment } from "./lib/audio";
 import { createInitialState, hydrateState } from "./lib/defaults";
@@ -55,6 +59,8 @@ export default function App() {
   const [recordingStatus, setRecordingStatus] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [showHelp, setShowHelp] = useState(true);
+  const [completionNotice, setCompletionNotice] = useState<{ title: string; detail: string } | null>(null);
+  const [toastNotice, setToastNotice] = useState<{ tone: "ok" | "error"; message: string } | null>(null);
 
   const stateRef = useRef(state);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -97,6 +103,26 @@ export default function App() {
   const errorCount = validations.filter((item) => item.level === "error").length;
   const isAiBusy = aiDraftingTask !== null || moduleDraftingId !== null;
   const help = (text: string) => (showHelp ? { "data-help": text } : {});
+
+  useEffect(() => {
+    if (!completionNotice) return;
+    const id = window.setTimeout(() => setCompletionNotice(null), 2600);
+    return () => window.clearTimeout(id);
+  }, [completionNotice]);
+
+  useEffect(() => {
+    if (!toastNotice) return;
+    const id = window.setTimeout(() => setToastNotice(null), 2200);
+    return () => window.clearTimeout(id);
+  }, [toastNotice]);
+
+  function showCompletion(title: string, detail: string) {
+    setCompletionNotice({ title, detail });
+  }
+
+  function showToast(message: string, tone: "ok" | "error" = "ok") {
+    setToastNotice({ tone, message });
+  }
 
   function patchState(patch: Partial<AppState>) {
     setState((current) => ({ ...current, ...patch }));
@@ -265,6 +291,7 @@ export default function App() {
         };
       });
       setAiStatus("AI 초안 생성 완료");
+      showCompletion("생성 완료", task === "diagnosis" ? "AI 심층 분석 결과를 반영했습니다." : "AI 초안을 작성해 화면에 반영했습니다.");
     } catch (error) {
       setAiStatus(error instanceof Error ? error.message : "AI 초안 생성 실패");
     } finally {
@@ -305,6 +332,7 @@ export default function App() {
         activeTab: "modules"
       }));
       setAiStatus(`${targetModule.id}. ${targetModule.name} AI 초안 작성 완료`);
+      showCompletion("생성 완료", `${targetModule.id}. ${targetModule.name} 초안을 반영했습니다.`);
     } catch (error) {
       setAiStatus(error instanceof Error ? error.message : "AI 초안 생성 실패");
     } finally {
@@ -459,6 +487,17 @@ export default function App() {
     a.download = `${state.project?.schoolName ?? "school"}_컨설팅_백업.json`;
     a.click();
     URL.revokeObjectURL(url);
+    showToast("작업 JSON을 저장했습니다.");
+  }
+
+  async function handleDownloadInterviewDocx() {
+    await downloadInterviewDocx(state);
+    showCompletion("생성 완료", "심층면담지 DOCX를 생성했습니다.");
+  }
+
+  async function handleDownloadPlanDocx() {
+    await downloadPlanDocx(state);
+    showCompletion("생성 완료", "운영계획서 DOCX를 생성했습니다.");
   }
 
   function downloadScheduleCsv() {
@@ -499,8 +538,10 @@ export default function App() {
       }
       setState(hydrateState(parsed));
       setUploadStatus("작업 파일을 불러왔습니다.");
+      showToast("작업 JSON을 불러왔습니다.");
     } catch (error) {
       setUploadStatus(error instanceof Error ? `작업 불러오기 실패: ${error.message}` : "작업 불러오기 실패");
+      showToast(error instanceof Error ? `작업 불러오기 실패: ${error.message}` : "작업 불러오기 실패", "error");
     }
   }
 
@@ -564,6 +605,23 @@ export default function App() {
       </aside>
 
       <main className="main">
+        <div className="feedbackLayer" aria-live="polite">
+          {completionNotice && !isAiBusy && (
+            <div className="completionToast">
+              <LottiePlayer animationData={generationComplete} className="completionLottie" label="생성 완료" loop={false} />
+              <div>
+                <strong>{completionNotice.title}</strong>
+                <span>{completionNotice.detail}</span>
+              </div>
+            </div>
+          )}
+          {toastNotice && (
+            <div className={`toastNotice ${toastNotice.tone}`}>
+              {toastNotice.tone === "error" ? <AlertCircle size={17} /> : <CheckCircle2 size={17} />}
+              <span>{toastNotice.message}</span>
+            </div>
+          )}
+        </div>
         <header className="topbar">
           <div>
             <p className="eyebrow">표준 파서: 서울고일초_사전 자가진단 분석.csv</p>
@@ -589,9 +647,13 @@ export default function App() {
         {state.activeTab === "guide" && aiStatus && <div className="notice aiNotice"><Sparkles size={17} />{aiStatus}</div>}
         {state.activeTab === "guide" && recordingStatus && <div className="notice recordingNotice"><Mic size={17} />{recordingStatus}</div>}
         {isAiBusy && state.activeTab !== "guide" && (
-          <div className="aiBusyBanner">
-            <span className="aiSpinner large" aria-hidden="true" />
-            <span>{moduleDraftingId !== null ? `${moduleDraftingId}번 과정 AI 초안 작성중` : "AI 분석중"}</span>
+          <div className="aiWaitingPanel" role="status" aria-live="polite">
+            <LottiePlayer animationData={aiProcessingLoader} className="aiWaitingLottie" label="AI 분석 대기" />
+            <div>
+              <p className="eyebrow">{moduleDraftingId !== null ? "과정별 AI 초안" : "AI 분석 대기"}</p>
+              <h2>{moduleDraftingId !== null ? `${moduleDraftingId}번 과정 초안을 작성하고 있습니다.` : "AI가 자료를 정리하고 있습니다."}</h2>
+              <p>진단 결과와 입력 내용을 바탕으로 문서에 들어갈 표현을 다듬는 중입니다.</p>
+            </div>
           </div>
         )}
 
@@ -947,13 +1009,13 @@ export default function App() {
               <FileText size={34} />
               <h2>심층면담지 DOCX</h2>
               <p>필수 안내 확인, 운영 개요, 학교 일반사항·인프라, 참여 목표, 친화도 진단, 모듈 구성, 고려사항, 핵심 요약을 PDF 양식 순서로 생성합니다.</p>
-              <button className="button primary" onClick={() => downloadInterviewDocx(state)}><FileDown size={18} />다운로드</button>
+              <button className="button primary" onClick={handleDownloadInterviewDocx}><FileDown size={18} />다운로드</button>
             </article>
             <article className="panel downloadCard">
               <FileText size={34} />
               <h2>운영계획서 DOCX</h2>
               <p>현황 분석, 강점·도전과제, 1·2차 면담 요약, 이슈→목표, 과정별 세부 프로그램·기대효과를 PDF 양식 순서로 생성합니다.</p>
-              <button className="button primary" onClick={() => downloadPlanDocx(state)}><FileDown size={18} />다운로드</button>
+              <button className="button primary" onClick={handleDownloadPlanDocx}><FileDown size={18} />다운로드</button>
             </article>
             <article className="panel workFileCard wide">
               <div>
