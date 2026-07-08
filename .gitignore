@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.vercel/
+.env
+.env.*
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+
+# Local generated outputs
+outputs/
+downloads/
+
