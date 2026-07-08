@@ -542,6 +542,18 @@ export default function App() {
           ))}
         </nav>
         <div className="sidebarFooter">
+          <div className="sidebarFileTools">
+            <strong>작업 파일 관리</strong>
+            <label className="resetButton" {...help("저장해 둔 작업 JSON을 불러와 이어서 작성합니다.")}>
+              <FolderOpen size={16} />
+              작업 불러오기
+              <input type="file" accept=".json" onChange={(event) => event.target.files?.[0] && restoreBackup(event.target.files[0])} />
+            </label>
+            <button className="resetButton" onClick={downloadBackup} {...help("현재 입력 상태를 JSON 파일로 저장합니다.")}>
+              <Download size={16} />
+              작업 저장
+            </button>
+          </div>
           <button className="resetButton" onClick={resetWorkspace}>
             <RotateCcw size={16} />
             처음부터 시작
@@ -564,11 +576,6 @@ export default function App() {
               <HelpCircle size={17} />
               도움말 {showHelp ? "켜짐" : "꺼짐"}
             </button>
-            <label className="button ghost" {...help("사전 자가진단 CSV를 업로드하면 진단 분석을 만들고, NEIS_API_KEY가 있으면 학교기본정보도 자동 조회합니다.")}>
-              <Upload size={17} />
-              진단 CSV
-              <input type="file" accept=".csv" onChange={(event) => event.target.files?.[0] && handleCsv(event.target.files[0])} />
-            </label>
           </div>
         </header>
 
@@ -592,11 +599,16 @@ export default function App() {
 
         {state.activeTab === "diagnosis" && (
           <section className="grid">
-            <article className="panel heroPanel">
+            <article className="panel heroPanel" {...help("전체 평균과 AI 심층 분석 초안을 보여주는 요약 카드입니다. CSV 업로드 후 분석 초안을 만들 수 있습니다.")}>
               <div>
                 <p className="eyebrow">{insightSourceLabel}</p>
                 <h2>{insights.average ? `${insights.average.toFixed(2)}점` : "CSV를 업로드하세요"}</h2>
                 <p>{diagnosisSummary}</p>
+                <label className="button ghost inlineAction" {...help("사전 자가진단 CSV를 업로드하면 진단 분석을 만들고, NEIS_API_KEY가 있으면 학교기본정보도 자동 조회합니다.")}>
+                  <Upload size={17} />
+                  진단 CSV 업로드
+                  <input type="file" accept=".csv" onChange={(event) => event.target.files?.[0] && handleCsv(event.target.files[0])} />
+                </label>
                 <button className="button primary inlineAction" onClick={() => runAiDraft("diagnosis")} disabled={aiDraftingTask === "diagnosis"}>
                   {aiDraftingTask === "diagnosis" ? <LottiePlayer animationData={aiAnalysisLoader} className="buttonLottie" label="AI 분석중" /> : <Sparkles size={17} />}
                   {aiDraftingTask === "diagnosis" ? "AI 분석중" : "AI로 심층 분석"}
@@ -604,11 +616,11 @@ export default function App() {
               </div>
               {aiDraftingTask === "diagnosis" ? <LottiePlayer animationData={aiAnalysisLoader} className="heroLottie" label="AI 분석중" /> : <BarChart3 className="heroIcon" />}
             </article>
-            <article className="panel wide">
+            <article className="panel wide" {...help("과정별 평균 점수를 막대로 비교합니다. 각 행에 마우스를 올리면 과정 설명을 볼 수 있습니다.")}>
               <h2>과정별 평균 점수</h2>
               <div className="bars">
                 {(state.project?.moduleScores ?? []).map((score) => (
-                  <div className="barRow" key={score.moduleId}>
+                  <div className="barRow" key={score.moduleId} {...help(moduleHelp(score.moduleId, state.modules))}>
                     <span>{score.moduleId}. {score.moduleName}</span>
                     <div className="barTrack">
                       <div className={`barFill ${stageTone(score.stage)}`} style={{ width: `${score.score * 20}%` }} />
@@ -618,7 +630,7 @@ export default function App() {
                 ))}
               </div>
             </article>
-            <article className="panel wide">
+            <article className="panel wide" {...help("자가진단 결과를 바탕으로 학교의 강점 2개와 도전 과제 2개를 문서용 문장으로 정리합니다.")}>
               <h2>우리학교 강점과 디지털 기반 교육 혁신을 위한 도전 과제</h2>
               <div className="insightCardGrid">
                 <div className="insightBox strength">
@@ -639,7 +651,7 @@ export default function App() {
                 </div>
               </div>
             </article>
-            <article className="panel wide">
+            <article className="panel wide" {...help("각 과정의 분석 결과와 시사점을 분리해서 보여줍니다. 시사점은 운영계획과 연수 구성의 근거로 사용됩니다.")}>
               <h2>사전 진단 - 과정별 진단 분석 결과</h2>
               <div className="tableScroller">
                 <table className="diagnosisTable">
@@ -662,7 +674,7 @@ export default function App() {
                             <strong>분석 결과</strong>
                             <p>{diagnosisResultText(score)}</p>
                             <strong>시사점</strong>
-                            <p>{state.plan.diagnosisImplications?.[String(score.moduleId)] || diagnosisImplicationText(score)}</p>
+                            <p>{polishDraftText(state.plan.diagnosisImplications?.[String(score.moduleId)] || diagnosisImplicationText(score))}</p>
                           </div>
                         </td>
                       </tr>
@@ -708,7 +720,7 @@ export default function App() {
                 ))}
               </article>
             )}
-            <article className="panel wide">
+            <article className="panel wide" {...help("도약, 만족, 추월 단계의 의미를 확인하는 참고 영역입니다.")}>
               <h2>단계별 설명</h2>
               <div className="stageGuideGrid">
                 {Object.entries(stageDescriptions).map(([stage, description]) => (
@@ -719,7 +731,7 @@ export default function App() {
                 ))}
               </div>
             </article>
-            <article className="panel">
+            <article className="panel" {...help("점수가 낮아 사전면담과 연수 설계에서 먼저 확인할 영역입니다.")}>
               <h2>우선 확인 TOP 3</h2>
               {insights.lows.map((item) => (
                 <div className="miniCard warn" key={item.moduleId}>
@@ -728,7 +740,7 @@ export default function App() {
                 </div>
               ))}
             </article>
-            <article className="panel">
+            <article className="panel" {...help("상대적으로 점수가 높아 강점으로 활용할 수 있는 영역입니다.")}>
               <h2>강점 TOP 3</h2>
               {insights.highs.map((item) => (
                 <div className="miniCard good" key={item.moduleId}>
@@ -737,7 +749,7 @@ export default function App() {
                 </div>
               ))}
             </article>
-            <article className="panel wide">
+            <article className="panel wide" {...help("AI가 만든 종합 분석문을 사람이 직접 수정하는 영역입니다. 운영계획서 현황 분석에 반영됩니다.")}>
               <h2>분석 초안 편집</h2>
               <textarea
                 value={state.plan.editedInsights}
@@ -803,7 +815,7 @@ export default function App() {
                 </button>
               </div>
               {state.modules.map((module) => (
-                <article className={`moduleCard ${module.selected ? "selected" : ""}`} key={module.id}>
+                <article className={`moduleCard ${module.selected ? "selected" : ""}`} key={module.id} {...help(module.selected ? `${module.name} 과정의 차시, 일정, 희망 주제와 AI 초안을 편집합니다.` : `${module.name} 과정입니다. 선택하면 세부 입력 영역이 열립니다.`)}>
                   <div className="moduleHead">
                     <button className="moduleTitle" onClick={() => applyModule(module.id)}>
                       {module.selected && <CheckCircle2 size={18} />}
@@ -977,6 +989,24 @@ function tabHelp(tab: string) {
     export: "최종 일정표 CSV와 심층면담지/운영계획서 DOCX를 내려받습니다."
   };
   return guide[tab] ?? "";
+}
+
+function moduleHelp(moduleId: number, modules: TrainingModule[]) {
+  const module = modules.find((item) => item.id === moduleId);
+  if (!module) return "이 과정의 평균 점수와 단계입니다.";
+  return `${module.id}. ${module.name}: ${module.description}`;
+}
+
+function polishDraftText(text: string) {
+  return text
+    .replace(/극대화함/g, "높일 필요가 있습니다")
+    .replace(/마련함/g, "마련할 필요가 있습니다")
+    .replace(/개발함/g, "개발할 필요가 있습니다")
+    .replace(/정립함/g, "정립할 필요가 있습니다")
+    .replace(/공유함/g, "공유할 필요가 있습니다")
+    .replace(/확산함/g, "확산할 필요가 있습니다")
+    .replace(/강화함/g, "강화할 필요가 있습니다")
+    .replace(/제고함/g, "높일 필요가 있습니다");
 }
 
 function ScheduleTable({ modules, schoolName }: { modules: TrainingModule[]; schoolName: string }) {

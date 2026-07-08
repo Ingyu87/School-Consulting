@@ -78,6 +78,8 @@ Return exactly one valid JSON object. Do not wrap it in markdown. Do not add exp
 
 General rules:
 - Write in polished Korean suitable for official school consulting drafts.
+- Use a consistent formal Korean sentence ending such as "-합니다", "-있습니다", "-필요가 있습니다", or "-방향이 적절합니다".
+- Do not use terse noun endings such as "-함" or "-음". Avoid deterministic wording like "극대화함", "마련함", "개발함", "정립함", "공유함"; rewrite them as recommendations.
 - Treat every generated sentence as a draft, not a confirmed fact.
 - Do not invent dates, times, places, headcount, contacts, accounts, or personal information.
 - Do not change user-entered schedule fields.
