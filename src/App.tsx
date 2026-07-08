@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart3,
   CalendarDays,
@@ -7,13 +7,16 @@ import {
   FileDown,
   FileText,
   FolderOpen,
+  Mic,
   Save,
   Sparkles,
+  Square,
   Upload
 } from "lucide-react";
 import { defaultModules } from "./data/modules";
 import { generateAiDraft } from "./lib/ai";
-import { buildInsights, stageTone } from "./lib/diagnosis";
+import { analyzeInterviewAudio } from "./lib/audio";
+import { buildInsights, stageDescriptions, stageTone } from "./lib/diagnosis";
 import { parseDiagnosisCsv } from "./lib/csv/parseDiagnosisCsv";
 import { parseLectureScheduleCsv } from "./lib/csv/parseLectureScheduleCsv";
 import { downloadInterviewDocx, downloadPlanDocx } from "./lib/docx/exportDocs";
@@ -29,15 +32,21 @@ const initialState: AppState = {
     dateTime: "",
     coordinators: "",
     participants: "",
+    transcript: "",
     notes: "",
     resultSummary: ""
   },
   plan: {
     strengths: "",
+    strength1: "",
+    strength2: "",
     challenges: "",
+    challenge1: "",
+    challenge2: "",
     interviewSummary: "",
     roadmapNotes: "",
     editedInsights: "",
+    diagnosisImplications: {},
     insightSource: "basic"
   },
   updatedAt: new Date().toISOString()
@@ -45,9 +54,9 @@ const initialState: AppState = {
 
 const tabs = [
   ["diagnosis", "진단 분석"],
-  ["interview", "심층면담"],
-  ["modules", "연수 구성"],
   ["plan", "운영계획"],
+  ["modules", "연수 구성"],
+  ["interview", "심층면담"],
   ["export", "다운로드"]
 ] as const;
 
@@ -57,6 +66,10 @@ export default function App() {
   const [uploadStatus, setUploadStatus] = useState("");
   const [scheduleStatus, setScheduleStatus] = useState("");
   const [aiStatus, setAiStatus] = useState("");
+  const [recordingStatus, setRecordingStatus] = useState("");
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   useEffect(() => {
     loadState().then((saved) => {
@@ -108,6 +121,7 @@ export default function App() {
         plan: {
           ...current.plan,
           editedInsights: buildInsights(project.moduleScores).draft,
+          diagnosisImplications: {},
           insightSource: "basic"
         }
       }));
@@ -196,9 +210,14 @@ export default function App() {
           plan: {
             ...current.plan,
             editedInsights: draft.diagnosisInsight ?? current.plan.editedInsights,
+            diagnosisImplications: draft.diagnosisImplications ?? current.plan.diagnosisImplications,
             insightSource: draft.diagnosisInsight ? "ai" : current.plan.insightSource,
             strengths: draft.strengths ?? current.plan.strengths,
+            strength1: draft.strength1 ?? current.plan.strength1,
+            strength2: draft.strength2 ?? current.plan.strength2,
             challenges: draft.challenges ?? current.plan.challenges,
+            challenge1: draft.challenge1 ?? current.plan.challenge1,
+            challenge2: draft.challenge2 ?? current.plan.challenge2,
             interviewSummary: draft.interviewSummary ?? current.plan.interviewSummary,
             roadmapNotes: draft.roadmapNotes ?? current.plan.roadmapNotes
           },
@@ -208,6 +227,56 @@ export default function App() {
       setAiStatus(draft.warnings?.length ? `AI 초안 생성 완료 · 확인 필요 ${draft.warnings.length}건` : "AI 초안 생성 완료");
     } catch (error) {
       setAiStatus(error instanceof Error ? error.message : "AI 초안 생성 실패");
+    }
+  }
+
+  async function startInterviewRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+      recorder.onstop = () => {
+        stream.getTracks().forEach((track) => track.stop());
+        void analyzeRecordedInterview(new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" }));
+      };
+      recorder.start();
+      setIsRecording(true);
+      setRecordingStatus("녹음 중");
+    } catch (error) {
+      setRecordingStatus(error instanceof Error ? error.message : "마이크 권한을 확인해주세요.");
+    }
+  }
+
+  function stopInterviewRecording() {
+    if (!mediaRecorderRef.current || mediaRecorderRef.current.state === "inactive") return;
+    setRecordingStatus("전사 및 AI 분석 중");
+    setIsRecording(false);
+    mediaRecorderRef.current.stop();
+  }
+
+  async function analyzeRecordedInterview(audio: Blob) {
+    try {
+      const result = await analyzeInterviewAudio(audio, state);
+      setState((current) => ({
+        ...current,
+        interview: {
+          ...current.interview,
+          transcript: result.transcript || current.interview.transcript,
+          notes: result.considerations || current.interview.notes,
+          resultSummary: result.resultSummary || current.interview.resultSummary
+        },
+        plan: {
+          ...current.plan,
+          interviewSummary: result.planInterviewSummary || current.plan.interviewSummary
+        }
+      }));
+      setRecordingStatus("전사 및 AI 분석 완료");
+    } catch (error) {
+      setRecordingStatus(error instanceof Error ? error.message : "전사 및 AI 분석 실패");
     }
   }
 
@@ -319,6 +388,7 @@ export default function App() {
         {uploadStatus && <div className="notice">{uploadStatus}</div>}
         {scheduleStatus && <div className="notice scheduleNotice"><CalendarDays size={17} />{scheduleStatus}</div>}
         {aiStatus && <div className="notice aiNotice"><Sparkles size={17} />{aiStatus}</div>}
+        {recordingStatus && <div className="notice recordingNotice"><Mic size={17} />{recordingStatus}</div>}
 
         {state.activeTab === "diagnosis" && (
           <section className="grid">
@@ -344,6 +414,44 @@ export default function App() {
                       <div className={`barFill ${stageTone(score.stage)}`} style={{ width: `${score.score * 20}%` }} />
                     </div>
                     <strong>{score.score.toFixed(2)}</strong>
+                  </div>
+                ))}
+              </div>
+            </article>
+            <article className="panel wide">
+              <h2>사전 진단 - 과정별 진단 분석 결과</h2>
+              <div className="tableScroller">
+                <table className="diagnosisTable">
+                  <thead>
+                    <tr>
+                      <th>구분</th>
+                      <th>평균 점수</th>
+                      <th>단계</th>
+                      <th>자가 진단 분석 결과</th>
+                      <th>시사점</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(state.project?.moduleScores ?? []).map((score) => (
+                      <tr key={score.moduleId}>
+                        <td>모듈{score.moduleId}<br />{score.moduleName}</td>
+                        <td>{score.score.toFixed(2)}</td>
+                        <td>{score.stage}</td>
+                        <td>{score.question || `${score.moduleName} 영역의 평균 점수는 ${score.score.toFixed(2)}점입니다.`}</td>
+                        <td>{state.plan.diagnosisImplications?.[String(score.moduleId)] || "AI로 심층 분석을 실행하면 CSV 결과를 바탕으로 시사점이 작성됩니다."}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </article>
+            <article className="panel wide">
+              <h2>단계별 설명</h2>
+              <div className="stageGuideGrid">
+                {Object.entries(stageDescriptions).map(([stage, description]) => (
+                  <div className={`stageGuide ${stageTone(stage as keyof typeof stageDescriptions)}`} key={stage}>
+                    <strong>{stage}</strong>
+                    <p>{description}</p>
                   </div>
                 ))}
               </div>
@@ -381,14 +489,21 @@ export default function App() {
           <section className="panel formPanel">
             <div className="sectionToolbar">
               <h2>심층면담지 작성</h2>
-              <button className="button primary" onClick={() => runAiDraft("interview-plan")}>
-                <Sparkles size={17} />
-                AI 면담 초안
-              </button>
+              <div className="toolbarActions">
+                <button className={isRecording ? "button dangerButton" : "button ghost"} onClick={isRecording ? stopInterviewRecording : startInterviewRecording}>
+                  {isRecording ? <Square size={17} /> : <Mic size={17} />}
+                  {isRecording ? "녹음 정지" : "녹음 시작"}
+                </button>
+                <button className="button primary" onClick={() => runAiDraft("interview-plan")}>
+                  <Sparkles size={17} />
+                  AI 초안
+                </button>
+              </div>
             </div>
             <FormInput label="심층면담 일시/장소" value={state.interview.dateTime} onChange={(value) => patchState({ interview: { ...state.interview, dateTime: value } })} />
             <FormInput label="참여 코디네이터" value={state.interview.coordinators} onChange={(value) => patchState({ interview: { ...state.interview, coordinators: value } })} />
             <FormInput label="참여 교원" value={state.interview.participants} onChange={(value) => patchState({ interview: { ...state.interview, participants: value } })} />
+            <FormArea label="면담 전사" value={state.interview.transcript ?? ""} onChange={(value) => patchState({ interview: { ...state.interview, transcript: value } })} />
             <FormArea label="기타 고려사항" value={state.interview.notes} onChange={(value) => patchState({ interview: { ...state.interview, notes: value } })} />
             <FormArea label="면담 핵심 결과" value={state.interview.resultSummary} onChange={(value) => patchState({ interview: { ...state.interview, resultSummary: value } })} />
           </section>
@@ -472,8 +587,12 @@ export default function App() {
         {state.activeTab === "plan" && (
           <section className="panel formPanel">
             <h2>운영계획서 작성</h2>
-            <FormArea label="우리학교 강점" value={state.plan.strengths} onChange={(value) => patchState({ plan: { ...state.plan, strengths: value } })} />
-            <FormArea label="도전 과제" value={state.plan.challenges} onChange={(value) => patchState({ plan: { ...state.plan, challenges: value } })} />
+            <div className="twoColumnFields">
+              <FormArea label="우리학교 강점 1" value={state.plan.strength1 ?? state.plan.strengths} onChange={(value) => patchState({ plan: { ...state.plan, strength1: value } })} />
+              <FormArea label="우리학교 강점 2" value={state.plan.strength2 ?? ""} onChange={(value) => patchState({ plan: { ...state.plan, strength2: value } })} />
+              <FormArea label="도전 과제 1" value={state.plan.challenge1 ?? state.plan.challenges} onChange={(value) => patchState({ plan: { ...state.plan, challenge1: value } })} />
+              <FormArea label="도전 과제 2" value={state.plan.challenge2 ?? ""} onChange={(value) => patchState({ plan: { ...state.plan, challenge2: value } })} />
+            </div>
             <FormArea label="심층면담 결과 요약" value={state.plan.interviewSummary} onChange={(value) => patchState({ plan: { ...state.plan, interviewSummary: value } })} />
             <FormArea label="로드맵 및 기대효과" value={state.plan.roadmapNotes} onChange={(value) => patchState({ plan: { ...state.plan, roadmapNotes: value } })} />
           </section>

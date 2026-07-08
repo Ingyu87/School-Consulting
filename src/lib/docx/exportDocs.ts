@@ -12,7 +12,7 @@ import {
   WidthType
 } from "docx";
 import type { AppState, TrainingModule } from "../../types";
-import { buildInsights } from "../diagnosis";
+import { buildInsights, stageDescriptions } from "../diagnosis";
 
 const navy = "17296B";
 const gray = "F3F5F8";
@@ -42,6 +42,8 @@ export async function downloadInterviewDocx(state: AppState) {
           moduleTable(state.modules.filter((module) => module.selected)),
           section("최종 학교 스케줄표"),
           scheduleTable(state.modules.filter((module) => module.selected), schoolName),
+          section("면담 전사"),
+          body(state.interview.transcript || " "),
           section("기타 고려사항"),
           body(state.interview.notes || " ")
         ]
@@ -61,11 +63,15 @@ export async function downloadPlanDocx(state: AppState) {
           title(`${schoolName} 운영계획서`),
           section("Ⅰ. 우리학교 디지털 기반 교육 현황 알아보기"),
           body(state.plan.editedInsights || insights.draft),
-          scoreTable(state.project?.moduleScores ?? []),
+          scoreTable(state.project?.moduleScores ?? [], state.plan.diagnosisImplications ?? {}),
+          section("단계별 설명"),
+          kvTable(Object.entries(stageDescriptions) as [string, string][]),
           section("Ⅱ. 강점과 도전 과제"),
           kvTable([
-            ["강점", state.plan.strengths],
-            ["도전 과제", state.plan.challenges]
+            ["우리학교 강점 1", state.plan.strength1 || state.plan.strengths],
+            ["우리학교 강점 2", state.plan.strength2 || " "],
+            ["도전 과제 1", state.plan.challenge1 || state.plan.challenges],
+            ["도전 과제 2", state.plan.challenge2 || " "]
           ]),
           section("Ⅲ. 심층면담 결과 핵심 요약"),
           body(state.plan.interviewSummary || state.interview.resultSummary || " "),
@@ -180,15 +186,21 @@ function scheduleTable(modules: TrainingModule[], schoolName: string) {
   });
 }
 
-function scoreTable(scores: NonNullable<AppState["project"]>["moduleScores"]) {
+function scoreTable(scores: NonNullable<AppState["project"]>["moduleScores"], implications: Record<string, string>) {
   return new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
     rows: [
-      new TableRow({ children: ["과정", "평균", "단계"].map((label) => cell(label, true)) }),
+      new TableRow({ children: ["구분", "평균 점수", "단계", "자가 진단 분석 결과", "시사점"].map((label) => cell(label, true)) }),
       ...scores.map(
         (score) =>
           new TableRow({
-            children: [cell(`${score.moduleId}. ${score.moduleName}`), cell(score.score.toFixed(2)), cell(score.stage)]
+            children: [
+              cell(`모듈${score.moduleId} ${score.moduleName}`),
+              cell(score.score.toFixed(2)),
+              cell(score.stage),
+              cell(score.question || `${score.moduleName} 평균 ${score.score.toFixed(2)}점`),
+              cell(implications[String(score.moduleId)] || "AI 심층 분석 후 작성")
+            ]
           })
       )
     ]

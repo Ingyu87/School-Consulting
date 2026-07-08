@@ -53,23 +53,31 @@ export type TrainingModule = {
   materials: string;
 };
 
+export type AppTab = "diagnosis" | "plan" | "modules" | "interview" | "export";
+
 export type AppState = {
-  activeTab: "diagnosis" | "interview" | "modules" | "plan" | "export";
+  activeTab: AppTab;
   project: ParsedDiagnosisProject | null;
   modules: TrainingModule[];
   interview: {
     dateTime: string;
     coordinators: string;
     participants: string;
+    transcript?: string;
     notes: string;
     resultSummary: string;
   };
   plan: {
     strengths: string;
+    strength1?: string;
+    strength2?: string;
     challenges: string;
+    challenge1?: string;
+    challenge2?: string;
     interviewSummary: string;
     roadmapNotes: string;
     editedInsights: string;
+    diagnosisImplications?: Record<string, string>;
     insightSource?: "basic" | "ai" | "edited";
   };
   updatedAt: string;
@@ -100,12 +108,25 @@ export type AiModuleUpdate = {
 
 export type AiDraftResponse = {
   diagnosisInsight?: string;
+  diagnosisImplications?: Record<string, string>;
   strengths?: string;
+  strength1?: string;
+  strength2?: string;
   challenges?: string;
+  challenge1?: string;
+  challenge2?: string;
   interviewNotes?: string;
   interviewResultSummary?: string;
   interviewSummary?: string;
   roadmapNotes?: string;
   moduleUpdates?: AiModuleUpdate[];
   warnings?: string[];
+};
+
+export type InterviewAudioAnalysisResponse = {
+  transcript: string;
+  considerations: string;
+  resultSummary: string;
+  planInterviewSummary?: string;
+  followUpQuestions?: string[];
 };
