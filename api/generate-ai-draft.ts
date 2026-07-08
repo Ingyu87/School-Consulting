@@ -82,10 +82,11 @@ General rules:
 - Write in polished Korean suitable for official school consulting drafts.
 - Do not merely copy or restate raw data. Every draft must include AI analysis: interpret what the data means, identify strengths or risks, infer school needs, and connect them to training design decisions.
 - Use numbers, scores, survey responses, schedules, and transcript details only as evidence for interpretation. Do not paste lists of raw values unless the requested field is explicitly a schedule or checklist.
-- Use a consistent formal Korean sentence ending such as "-합니다", "-있습니다", "-필요가 있습니다", or "-방향이 적절합니다".
+- Use a consistent formal Korean sentence ending such as "-합니다", "-있습니다", "-필요가 있습니다", "-해석됩니다", or "-방향이 적절합니다".
 - Do not use terse noun endings such as "-함" or "-음". Avoid deterministic wording like "극대화함", "마련함", "개발함", "정립함", "공유함"; rewrite them as recommendations.
+- Do not write formulaic sentences such as "단계임을 확인함", "것으로 예측됨", "필요가 있을 것으로 예측됨", or repeated copies of the same sentence pattern.
 - Treat every generated sentence as a draft, not a confirmed fact.
-- For diagnosisImplications, do not write labels like "시사점". Write one concise sentence ending with "-으로 예측됨" or "-할 필요가 있을 것으로 예측됨".
+- For diagnosisImplications, do not write labels like "시사점". Write exactly two connected sentences: first interpret what the module score suggests about the school's current practice, then recommend the training or interview focus. The two sentences must be analysis, not raw data restatement.
 - Do not invent dates, times, places, headcount, contacts, accounts, or personal information.
 - Do not change user-entered schedule fields.
 - If the school is in Seoul, refer to student digital devices as "디벗" when that wording is relevant.
@@ -93,7 +94,7 @@ General rules:
 Task rules:
 - task "diagnosis": analyze module scores, stages, infrastructure/open-ended responses, and school needs. Produce:
   diagnosisInsight, diagnosisImplications for modules 0-7, strength1, strength2, challenge1, challenge2, issueGoals, roadmapDirection, roadmapNotes.
-  Do not repeat survey questions as analysis. Convert scores and responses into implications, priorities, and recommended training focus.
+  Do not repeat survey questions as analysis. Convert scores and responses into implications, priorities, strengths, risks, and recommended training focus. In diagnosisImplications, mention the score only as evidence when useful, and do not start every module with the same phrase.
 - task "interview-plan": summarize and refine existing interview/plan content. Use interview.transcript when present, but do not mention missing transcript. Do not create new schedules.
   If draftSection is present, focus on that section only:
   - "interview-core": priorLevel, infraConsiderations, schoolRequests, additionalChecks, participationGoal, interviewResultSummary.
@@ -115,7 +116,7 @@ JSON shape:
 {
   "diagnosisInsight": "2-4 paragraph analysis draft",
   "diagnosisImplications": {
-    "0": "module 0 implication",
+    "0": "two-sentence module 0 analysis and implication",
     "1": "module 1 implication",
     "2": "module 2 implication",
     "3": "module 3 implication",

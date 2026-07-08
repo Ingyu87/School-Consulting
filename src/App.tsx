@@ -1205,24 +1205,28 @@ function ScheduleTable({ modules, schoolName, onCopy }: { modules: TrainingModul
 }
 
 function diagnosisCombinedText(score: ModuleScore, aiImplication?: string) {
-  const stageLabel = score.score < 3.8 ? "도약" : score.score < 4.6 ? "만족" : "추월";
-  const result = `${score.moduleName} 영역은 평균 ${score.score.toFixed(2)}점으로 ${stageLabel} 단계임을 확인함.`;
-  const implication = normalizeImplicationSentence(aiImplication || diagnosisImplicationText(score));
-  return `${result} ${implication}`;
+  if (aiImplication?.trim()) {
+    return normalizeDiagnosisAnalysis(aiImplication);
+  }
+  return `${diagnosisResultText(score)} ${normalizeDiagnosisAnalysis(diagnosisImplicationText(score))}`;
 }
 
-function normalizeImplicationSentence(text: string) {
+function normalizeDiagnosisAnalysis(text: string) {
   const cleaned = polishDraftText(text)
     .replace(/^시사점[:：]?\s*/g, "")
     .replace(/\s+/g, " ")
     .trim()
+    .replace(/단계임을 확인함/g, "단계로 해석됩니다")
+    .replace(/것으로 예측됨/g, "것으로 보입니다")
+    .replace(/확인함/g, "확인됩니다")
+    .replace(/마련함/g, "마련할 필요가 있습니다")
+    .replace(/극대화함/g, "높일 필요가 있습니다")
+    .replace(/개발함/g, "개발할 필요가 있습니다")
+    .replace(/정립함/g, "정립할 필요가 있습니다")
+    .replace(/공유함/g, "공유할 필요가 있습니다")
     .replace(/[.。]+$/g, "");
-  if (!cleaned) return "연수 구성과 면담 확인을 통해 학교 맞춤형 실행 방향을 구체화할 필요가 있을 것으로 예측됨.";
-  if (/예측됨$/.test(cleaned)) return `${cleaned}.`;
-  const base = cleaned
-    .replace(/(합니다|됩니다|있습니다|필요가 있습니다|적절합니다)$/g, "")
-    .replace(/\s+$/g, "");
-  return `${base}할 필요가 있을 것으로 예측됨.`;
+  if (!cleaned) return "연수 구성과 면담 내용을 함께 검토해 학교 맞춤형 실행 방향을 구체화할 필요가 있습니다.";
+  return `${cleaned}.`;
 }
 
 function sectionCompletionText(section?: AiDraftRequest["draftSection"]) {
