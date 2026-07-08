@@ -37,9 +37,11 @@ export default async function handler(request: any, response: any) {
 function buildPrompt(body: any) {
   const task = body?.task;
   const moduleId = body?.moduleId;
+  const draftSection = body?.draftSection;
   const safeBody = {
     task,
     moduleId,
+    draftSection,
     schoolName: body?.schoolName,
     moduleScores: body?.project?.moduleScores ?? [],
     infrastructureDistributions: body?.project?.infrastructureDistributions ?? [],
@@ -81,6 +83,7 @@ General rules:
 - Use a consistent formal Korean sentence ending such as "-합니다", "-있습니다", "-필요가 있습니다", or "-방향이 적절합니다".
 - Do not use terse noun endings such as "-함" or "-음". Avoid deterministic wording like "극대화함", "마련함", "개발함", "정립함", "공유함"; rewrite them as recommendations.
 - Treat every generated sentence as a draft, not a confirmed fact.
+- For diagnosisImplications, do not write labels like "시사점". Write one concise sentence ending with "-으로 예측됨" or "-할 필요가 있을 것으로 예측됨".
 - Do not invent dates, times, places, headcount, contacts, accounts, or personal information.
 - Do not change user-entered schedule fields.
 - If the school is in Seoul, refer to student digital devices as "디벗" when that wording is relevant.
@@ -89,7 +92,13 @@ Task rules:
 - task "diagnosis": analyze module scores, stages, infrastructure/open-ended responses, and school needs. Produce:
   diagnosisInsight, diagnosisImplications for modules 0-7, strength1, strength2, challenge1, challenge2, issueGoals, roadmapDirection, roadmapNotes.
   Do not repeat survey questions as analysis. Convert scores and responses into implications.
-- task "interview-plan": summarize and refine existing interview/plan content. Do not create new schedules.
+- task "interview-plan": summarize and refine existing interview/plan content. Use interview.transcript when present, but do not mention missing transcript. Do not create new schedules.
+  If draftSection is present, focus on that section only:
+  - "interview-core": priorLevel, infraConsiderations, schoolRequests, additionalChecks, participationGoal, interviewResultSummary.
+  - "interview-summary": interviewSummary.
+  - "second-interview": secondInterview-compatible follow-up summary in interviewSummary if no dedicated field is available.
+  - "issue-goals": issueGoals and roadmapDirection.
+  - "roadmap": roadmapNotes and roadmapDirection.
 - task "module-content": only write programName, schoolVoice, editableProgram, expectedEffect, materials for the provided module(s).
   Do not change hours, method, date, time, place, headcount, topic, selected.
   If moduleId is present, return exactly one moduleUpdates item for that moduleId.

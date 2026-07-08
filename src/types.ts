@@ -152,6 +152,7 @@ export type AppState = {
 export type AiDraftRequest = {
   task: "diagnosis" | "interview-plan" | "module-content";
   moduleId?: number;
+  draftSection?: "interview-summary" | "second-interview" | "issue-goals" | "roadmap" | "interview-core";
   schoolName: string;
   project: ParsedDiagnosisProject | null;
   school: SchoolInfo;

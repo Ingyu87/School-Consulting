@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#f6f8fb"/>
+  <path d="M0 0h1200v630H0z" fill="#f8fafc"/>
+  <g opacity=".52" stroke="#d8dee8" stroke-width="1">
+    <path d="M0 92h1200M0 184h1200M0 276h1200M0 368h1200M0 460h1200M0 552h1200"/>
+    <path d="M120 0v630M240 0v630M360 0v630M480 0v630M600 0v630M720 0v630M840 0v630M960 0v630M1080 0v630"/>
+  </g>
+  <text x="600" y="106" text-anchor="middle" font-family="Pretendard, Arial, sans-serif" font-size="58" font-weight="900" fill="#0f1f44">찾아가는 학교 컨설팅</text>
+  <text x="600" y="164" text-anchor="middle" font-family="Pretendard, Arial, sans-serif" font-size="30" font-weight="700" fill="#111827">AI 진단 분석 · 연수 설계 · 운영계획서 작성 지원</text>
+  <g transform="translate(150 220)">
+    <rect width="900" height="330" rx="24" fill="#fff" stroke="#d7deea" stroke-width="2"/>
+    <rect width="170" height="330" rx="24" fill="#132556"/>
+    <rect x="22" y="54" width="126" height="44" rx="8" fill="#20386e"/>
+    <text x="58" y="83" font-family="Arial, sans-serif" font-size="17" font-weight="700" fill="#fff">홈</text>
+    <text x="44" y="134" font-family="Arial, sans-serif" font-size="15" fill="#b9c4dc">진단 분석</text>
+    <text x="44" y="180" font-family="Arial, sans-serif" font-size="15" fill="#b9c4dc">연수 구성</text>
+    <text x="44" y="226" font-family="Arial, sans-serif" font-size="15" fill="#b9c4dc">운영계획</text>
+    <g transform="translate(202 34)">
+      <rect width="275" height="118" rx="14" fill="#fff" stroke="#dce3ee"/>
+      <text x="22" y="38" font-family="Arial, sans-serif" font-size="20" font-weight="800" fill="#162a5d">학교 진단 분석 리포트</text>
+      <circle cx="62" cy="76" r="28" fill="#e7f6ff"/>
+      <text x="62" y="84" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="900" fill="#1f4aa8">AI</text>
+      <polyline points="125,88 158,65 190,75 232,42" fill="none" stroke="#1f4aa8" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="232" cy="42" r="5" fill="#10a39b"/>
+    </g>
+    <g transform="translate(505 34)">
+      <rect width="330" height="118" rx="14" fill="#fff" stroke="#dce3ee"/>
+      <text x="22" y="38" font-family="Arial, sans-serif" font-size="20" font-weight="800" fill="#162a5d">연수 프로그램 기획</text>
+      <rect x="22" y="58" width="96" height="34" rx="7" fill="#1f4aa8"/>
+      <rect x="132" y="58" width="96" height="34" rx="7" fill="#eef1f6"/>
+      <rect x="22" y="98" width="96" height="34" rx="7" fill="#10a39b"/>
+      <rect x="132" y="98" width="96" height="34" rx="7" fill="#eef1f6"/>
+    </g>
+    <g transform="translate(202 184)">
+      <rect width="275" height="112" rx="14" fill="#fff" stroke="#dce3ee"/>
+      <text x="22" y="38" font-family="Arial, sans-serif" font-size="20" font-weight="800" fill="#162a5d">교육과정 세부 일정</text>
+      <rect x="22" y="60" width="84" height="36" rx="7" fill="#1f4aa8"/>
+      <rect x="118" y="60" width="84" height="36" rx="7" fill="#eef1f6"/>
+    </g>
+    <g transform="translate(505 184)">
+      <rect width="330" height="112" rx="14" fill="#fff" stroke="#dce3ee"/>
+      <text x="22" y="38" font-family="Arial, sans-serif" font-size="20" font-weight="800" fill="#162a5d">운영계획서 작성</text>
+      <circle cx="30" cy="66" r="7" fill="#1f4aa8"/><path d="M26 66l3 3 6-7" fill="none" stroke="#fff" stroke-width="2"/>
+      <text x="48" y="72" font-family="Arial, sans-serif" font-size="16" fill="#283449">현황 분석과 핵심 과제 정리</text>
+      <circle cx="30" cy="92" r="7" fill="#10a39b"/><path d="M26 92l3 3 6-7" fill="none" stroke="#fff" stroke-width="2"/>
+      <text x="48" y="98" font-family="Arial, sans-serif" font-size="16" fill="#283449">보고서 초안 생성 및 검토</text>
+    </g>
+  </g>
+</svg>

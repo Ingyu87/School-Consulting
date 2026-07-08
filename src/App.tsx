@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   BarChart3,
@@ -32,7 +32,7 @@ import { downloadInterviewDocx, downloadPlanDocx } from "./lib/docx/exportDocs";
 import { fetchNeisSchoolInfo, mapNeisToSchoolInfo } from "./lib/neis";
 import { clearState, loadState, saveState } from "./lib/storage";
 import { validateModules } from "./lib/validation";
-import type { AiModuleUpdate, AppState, InterviewState, ModuleScore, PlanState, SchoolInfo, TrainingModule } from "./types";
+import type { AiDraftRequest, AiModuleUpdate, AppState, InterviewState, ModuleScore, PlanState, SchoolInfo, TrainingModule } from "./types";
 
 // Vercel 함수 요청 크기 제한(약 4.5MB) 때문에 긴 면담 녹음은 구간으로 나눠 전사한다.
 const SEGMENT_MS = 180_000;
@@ -122,6 +122,22 @@ export default function App() {
 
   function showToast(message: string, tone: "ok" | "error" = "ok") {
     setToastNotice({ tone, message });
+  }
+
+  async function copyTable(event: MouseEvent<HTMLElement>, label = "표") {
+    const target = event.target as HTMLElement;
+    if (target.closest("input, textarea, button, select, label")) return;
+    const table = target.closest("table");
+    if (!table) return;
+    const text = Array.from(table.rows)
+      .map((row) => Array.from(row.cells).map((cell) => cell.innerText.replace(/\s+/g, " ").trim()).join("\t"))
+      .join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast(`${label} 내용을 복사했습니다.`);
+    } catch {
+      showToast("브라우저 권한 때문에 복사하지 못했습니다.", "error");
+    }
   }
 
   function patchState(patch: Partial<AppState>) {
@@ -231,7 +247,11 @@ export default function App() {
     }));
   }
 
-  async function runAiDraft(task: "diagnosis" | "interview-plan" | "module-content", nextTab?: AppState["activeTab"]) {
+  async function runAiDraft(
+    task: "diagnosis" | "interview-plan" | "module-content",
+    nextTab?: AppState["activeTab"],
+    draftSection?: "interview-summary" | "second-interview" | "issue-goals" | "roadmap" | "interview-core"
+  ) {
     if (!state.project) {
       setAiStatus("진단 CSV를 먼저 업로드해주세요.");
       return;
@@ -242,6 +262,7 @@ export default function App() {
     try {
       const draft = await generateAiDraft({
         task,
+        draftSection,
         schoolName: state.project.schoolName,
         project: state.project,
         school: state.school,
@@ -285,13 +306,24 @@ export default function App() {
             interviewSummary: draft.interviewSummary ?? current.plan.interviewSummary,
             issueGoals: normalizeIssueGoals(draft.issueGoals) ?? current.plan.issueGoals,
             roadmapDirection: draft.roadmapDirection ?? current.plan.roadmapDirection,
-            roadmapNotes: draft.roadmapNotes ?? current.plan.roadmapNotes
+            roadmapNotes: draft.roadmapNotes ?? current.plan.roadmapNotes,
+            secondInterview: {
+              ...current.plan.secondInterview,
+              resultSummary:
+                draftSection === "second-interview"
+                  ? draft.interviewSummary ?? draft.interviewResultSummary ?? current.plan.secondInterview.resultSummary
+                  : current.plan.secondInterview.resultSummary,
+              futurePlans:
+                draftSection === "second-interview"
+                  ? draft.roadmapDirection ?? current.plan.secondInterview.futurePlans
+                  : current.plan.secondInterview.futurePlans
+            }
           },
           activeTab: nextTab ?? (task === "diagnosis" ? "diagnosis" : task === "interview-plan" ? "interview" : "modules")
         };
       });
       setAiStatus("AI 초안 생성 완료");
-      showCompletion("생성 완료", task === "diagnosis" ? "AI 심층 분석 결과를 반영했습니다." : "AI 초안을 작성해 화면에 반영했습니다.");
+      showCompletion("생성 완료", task === "diagnosis" ? "AI 심층 분석 결과를 반영했습니다." : sectionCompletionText(draftSection));
     } catch (error) {
       setAiStatus(error instanceof Error ? error.message : "AI 초안 생성 실패");
     } finally {
@@ -450,7 +482,7 @@ export default function App() {
     finalizingRef.current = true;
     if (segmentTimerRef.current) window.clearTimeout(segmentTimerRef.current);
     setIsRecording(false);
-    setRecordingStatus("녹음 종료 · 마지막 구간 전사 중");
+    setRecordingStatus("녹음 종료 · 자동 전사 및 요약 중");
     recorder.stop();
   }
 
@@ -581,6 +613,14 @@ export default function App() {
           ))}
         </nav>
         <div className="sidebarFooter">
+          <div className="sidebarRecording">
+            <strong>면담 녹음</strong>
+            <button className={isRecording ? "resetButton recordingActive" : "resetButton"} onClick={isRecording ? stopInterviewRecording : startInterviewRecording}>
+              {isRecording ? <Square size={16} /> : <Mic size={16} />}
+              {isRecording ? "녹음 종료" : "녹음 시작"}
+            </button>
+            <span>{recordingStatus || (state.interview.transcript ? "전사 내용이 AI 초안에 반영됩니다." : "녹음 후 전사 내용이 AI 초안에 반영됩니다.")}</span>
+          </div>
           <div className="sidebarFileTools">
             <strong>작업 파일 관리</strong>
             <label className="resetButton" {...help("저장해 둔 작업 JSON을 불러와 같은 입력 내용으로 이어서 작성합니다. 원본 CSV/PDF 파일 자체는 포함되지 않습니다.")}>
@@ -713,7 +753,7 @@ export default function App() {
             </article>
             <article className="panel wide" {...help("각 과정의 분석 결과와 시사점을 분리해서 보여줍니다. 시사점은 운영계획과 연수 구성의 근거로 사용됩니다.")}>
               <h2>사전 진단 - 과정별 진단 분석 결과</h2>
-              <div className="tableScroller">
+              <div className="tableScroller copyableTable" onClick={(event) => copyTable(event, "과정별 진단 분석표")} title="클릭하면 표 내용을 복사합니다.">
                 <table className="diagnosisTable">
                   <thead>
                     <tr>
@@ -730,12 +770,7 @@ export default function App() {
                         <td>{score.score.toFixed(2)}</td>
                         <td>{score.stage}</td>
                         <td>
-                          <div className="diagnosisResultCell">
-                            <strong>분석 결과</strong>
-                            <p>{diagnosisResultText(score)}</p>
-                            <strong>시사점</strong>
-                            <p>{polishDraftText(state.plan.diagnosisImplications?.[String(score.moduleId)] || diagnosisImplicationText(score))}</p>
-                          </div>
+                          <p className="diagnosisCombinedText">{diagnosisCombinedText(score, state.plan.diagnosisImplications?.[String(score.moduleId)])}</p>
                         </td>
                       </tr>
                     ))}
@@ -832,19 +867,13 @@ export default function App() {
                   <h2>심층면담지 작성</h2>
                   <p className="formHint">심층면담지.pdf 양식 순서 그대로 작성됩니다. 녹음하면 구간별로 자동 전사되고, 종료 시 면담 항목이 자동 채워집니다.</p>
                 </div>
-                <div className="toolbarActions">
-                  <button className={isRecording ? "button dangerButton" : "button ghost"} onClick={isRecording ? stopInterviewRecording : startInterviewRecording}>
-                    {isRecording ? <Square size={17} /> : <Mic size={17} />}
-                    {isRecording ? "녹음 정지" : "녹음 시작"}
-                  </button>
-                  <button className="button primary" onClick={() => runAiDraft("interview-plan")} disabled={aiDraftingTask === "interview-plan"}>
-                    {aiDraftingTask === "interview-plan" ? <span className="aiSpinner" aria-hidden="true" /> : <Sparkles size={17} />}
-                    {aiDraftingTask === "interview-plan" ? "AI 분석중" : "AI 초안"}
-                  </button>
-                </div>
+                <button className="button primary" onClick={() => runAiDraft("interview-plan", "interview", "interview-core")} disabled={aiDraftingTask === "interview-plan"}>
+                  {aiDraftingTask === "interview-plan" ? <span className="aiSpinner" aria-hidden="true" /> : <Sparkles size={17} />}
+                  {aiDraftingTask === "interview-plan" ? "AI 분석중" : "AI 핵심요약"}
+                </button>
               </div>
             </div>
-            <InterviewFormView interview={state.interview} onChange={patchInterview} />
+            <InterviewFormView interview={state.interview} onChange={patchInterview} onAiDraft={(section) => runAiDraft("interview-plan", "interview", section)} isAiBusy={aiDraftingTask === "interview-plan"} />
           </section>
         )}
 
@@ -956,7 +985,7 @@ export default function App() {
                 </button>
               </div>
             </div>
-            <PlanFormView plan={state.plan} onChange={patchPlan} />
+            <PlanFormView plan={state.plan} onChange={patchPlan} onAiDraft={(section) => runAiDraft("interview-plan", "plan", section)} isAiBusy={aiDraftingTask === "interview-plan"} />
           </section>
         )}
 
@@ -1003,7 +1032,7 @@ export default function App() {
                   스케줄표 CSV
                 </button>
               </div>
-              <ScheduleTable modules={selectedModules} schoolName={state.project?.schoolName ?? "새학교"} />
+              <ScheduleTable modules={selectedModules} schoolName={state.project?.schoolName ?? "새학교"} onCopy={(event) => copyTable(event, "최종 학교 스케줄표")} />
             </article>
             <article className="panel downloadCard">
               <FileText size={34} />
@@ -1085,13 +1114,13 @@ function polishDraftText(text: string) {
     .replace(/제고함/g, "높일 필요가 있습니다");
 }
 
-function ScheduleTable({ modules, schoolName }: { modules: TrainingModule[]; schoolName: string }) {
+function ScheduleTable({ modules, schoolName, onCopy }: { modules: TrainingModule[]; schoolName: string; onCopy?: (event: MouseEvent<HTMLElement>) => void }) {
   if (modules.length === 0) {
     return <p className="emptyText">선택된 과정이 없습니다. 연수 구성에서 과정을 선택하면 스케줄표가 생성됩니다.</p>;
   }
 
   return (
-    <div className="tableScroller">
+    <div className="tableScroller copyableTable" onClick={onCopy} title="클릭하면 표 내용을 복사합니다.">
       <table className="scheduleTable">
         <thead>
           <tr>
@@ -1130,6 +1159,36 @@ function ScheduleTable({ modules, schoolName }: { modules: TrainingModule[]; sch
       </table>
     </div>
   );
+}
+
+function diagnosisCombinedText(score: ModuleScore, aiImplication?: string) {
+  const stageLabel = score.score < 3.8 ? "도약" : score.score < 4.6 ? "만족" : "추월";
+  const result = `${score.moduleName} 영역은 평균 ${score.score.toFixed(2)}점으로 ${stageLabel} 단계임을 확인함.`;
+  const implication = normalizeImplicationSentence(aiImplication || diagnosisImplicationText(score));
+  return `${result} ${implication}`;
+}
+
+function normalizeImplicationSentence(text: string) {
+  const cleaned = polishDraftText(text)
+    .replace(/^시사점[:：]?\s*/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[.。]+$/g, "");
+  if (!cleaned) return "연수 구성과 면담 확인을 통해 학교 맞춤형 실행 방향을 구체화할 필요가 있을 것으로 예측됨.";
+  if (/예측됨$/.test(cleaned)) return `${cleaned}.`;
+  const base = cleaned
+    .replace(/(합니다|됩니다|있습니다|필요가 있습니다|적절합니다)$/g, "")
+    .replace(/\s+$/g, "");
+  return `${base}할 필요가 있을 것으로 예측됨.`;
+}
+
+function sectionCompletionText(section?: AiDraftRequest["draftSection"]) {
+  if (section === "interview-core") return "심층면담 결과 핵심요약 초안을 반영했습니다.";
+  if (section === "interview-summary") return "심층면담 1차 결과 요약 초안을 반영했습니다.";
+  if (section === "second-interview") return "심층면담 2차 이상 결과 요약 초안을 반영했습니다.";
+  if (section === "issue-goals") return "이슈와 목표 도출 초안을 반영했습니다.";
+  if (section === "roadmap") return "로드맵 및 기대효과 종합 의견을 반영했습니다.";
+  return "AI 초안을 작성해 화면에 반영했습니다.";
 }
 
 function diagnosisResultText(score: ModuleScore) {

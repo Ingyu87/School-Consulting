@@ -26,6 +26,17 @@ button, input, textarea, select { font: inherit; }
 .tabs button { border: 0; color: #e2e8f0; background: transparent; text-align: left; padding: 12px 14px; border-radius: 8px; cursor: pointer; }
 .tabs button.active, .tabs button:hover { background: rgba(255,255,255,.13); color: #fff; }
 .sidebarFooter { margin-top: auto; display: grid; gap: 10px; }
+.sidebarRecording {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 8px;
+  background: rgba(255,255,255,.06);
+}
+.sidebarRecording strong { color: #fff; font-size: 13px; }
+.sidebarRecording span { color: #cbd5e1; font-size: 12px; line-height: 1.45; }
+.resetButton.recordingActive { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
 .sidebarFileTools { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.18); }
 .sidebarFileTools strong { color: #dbeafe; font-size: 13px; }
 .sidebarFileTools input { display: none; }
@@ -132,6 +143,8 @@ h2 { margin: 0 0 16px; font-size: 19px; color: var(--navy); }
 .inlineAction { margin-top: 14px; }
 .sectionToolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
 .sectionToolbar h2 { margin: 0; }
+.sectionTitleRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.sectionTitleRow h3 { margin: 0; }
 .toolbarActions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 20px; box-shadow: 0 10px 22px rgba(15, 23, 42, .04); animation: rise .32s ease both; }
@@ -208,6 +221,8 @@ textarea { width: 100%; min-height: 140px; resize: vertical; border: 1px solid v
 .workFileActions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .workFileActions input { display: none; }
 .tableScroller { width: 100%; overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+.copyableTable { cursor: copy; }
+.copyableTable input, .copyableTable textarea, .copyableTable button, .copyableTable select { cursor: auto; }
 .scheduleTable { width: 100%; min-width: 1120px; border-collapse: collapse; background: #fff; }
 .scheduleTable th, .scheduleTable td { border: 1px solid var(--line); padding: 10px 11px; text-align: left; vertical-align: top; font-size: 14px; line-height: 1.45; }
 .scheduleTable th { background: var(--navy); color: #fff; font-weight: 700; white-space: nowrap; }
@@ -222,6 +237,7 @@ textarea { width: 100%; min-height: 140px; resize: vertical; border: 1px solid v
 .diagnosisResultCell strong { color: var(--navy); font-size: 13px; }
 .diagnosisResultCell p { margin: 0 0 8px; }
 .diagnosisResultCell p:last-child { margin-bottom: 0; }
+.diagnosisCombinedText { margin: 0; line-height: 1.65; }
 .stageGuideGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .stageGuide { border: 1px solid var(--line); border-left: 5px solid var(--blue); border-radius: 8px; padding: 13px 14px; background: #fff; }
 .stageGuide.leap { border-left-color: var(--amber); }
