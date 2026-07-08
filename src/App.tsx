@@ -893,12 +893,8 @@ export default function App() {
               <div className="sectionToolbar">
                 <div>
                   <h2>심층면담지 작성</h2>
-                  <p className="formHint">심층면담지.pdf 양식 순서 그대로 작성됩니다. 녹음하면 구간별로 자동 전사되고, 종료 시 면담 항목이 자동 채워집니다.</p>
+                  <p className="formHint">심층면담지.pdf 양식 순서 그대로 작성됩니다. 녹음 전사와 입력 내용을 바탕으로 필요한 항목에서 AI 초안을 작성합니다.</p>
                 </div>
-                <button className="button primary" onClick={() => runAiDraft("interview-plan", "interview", "interview-core")} disabled={aiDraftingTask === "interview-plan"}>
-                  {aiDraftingTask === "interview-plan" ? <span className="aiSpinner" aria-hidden="true" /> : <Sparkles size={17} />}
-                  {aiDraftingTask === "interview-plan" ? "AI 분석중" : "AI 핵심요약"}
-                </button>
               </div>
             </div>
             <InterviewFormView interview={state.interview} onChange={patchInterview} onAiDraft={(section) => runAiDraft("interview-plan", "interview", section)} isAiBusy={aiDraftingTask === "interview-plan"} />

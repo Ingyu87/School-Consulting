@@ -89,11 +89,11 @@ export function InterviewFormView({ interview, onChange, onAiDraft, isAiBusy }: 
           {onAiDraft && (
             <button className="button primary compact" onClick={() => onAiDraft("interview-core")} disabled={isAiBusy}>
               {isAiBusy ? <span className="aiSpinner" aria-hidden="true" /> : <Sparkles size={15} />}
-              AI 초안
+              AI 결과 요약 작성
             </button>
           )}
         </div>
-        <p className="formHint">전역 녹음 전사 내용이 있으면 함께 참고하고, 없으면 진단 결과와 연수 구성 내용을 바탕으로 작성합니다.</p>
+        <p className="formHint">녹음 전사, 입력된 면담 내용, 진단 결과, 연수 구성을 함께 참고해 참여 목표와 면담 핵심 결과 초안을 작성합니다.</p>
         <FormArea label="면담 대상 학교의 연수 참여 목표" value={interview.participationGoal} onChange={(participationGoal) => onChange({ participationGoal })} compact />
         <FormArea label="면담 핵심 결과" value={interview.resultSummary} onChange={(resultSummary) => onChange({ resultSummary })} />
         <p className="formHint">※ 심층면담 운영 시 현장 사진 및 회의 참여자 서명부 수령 필수</p>
