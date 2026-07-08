@@ -15,8 +15,10 @@ import {
   Upload
 } from "lucide-react";
 import { InterviewFormView } from "./components/InterviewFormView";
+import { LottiePlayer } from "./components/LottiePlayer";
 import { PlanFormView } from "./components/PlanFormView";
 import { SchoolInfoForm } from "./components/SchoolInfoForm";
+import aiAnalysisLoader from "./assets/ai-analysis-loader.json";
 import { generateAiDraft } from "./lib/ai";
 import { summarizeInterviewTranscript, transcribeInterviewSegment } from "./lib/audio";
 import { createInitialState, hydrateState } from "./lib/defaults";
@@ -48,6 +50,7 @@ export default function App() {
   const [uploadStatus, setUploadStatus] = useState("");
   const [scheduleStatus, setScheduleStatus] = useState("");
   const [aiStatus, setAiStatus] = useState("");
+  const [aiDraftingTask, setAiDraftingTask] = useState<"diagnosis" | "interview-plan" | "module-content" | null>(null);
   const [moduleDraftingId, setModuleDraftingId] = useState<number | null>(null);
   const [recordingStatus, setRecordingStatus] = useState("");
   const [isRecording, setIsRecording] = useState(false);
@@ -91,6 +94,7 @@ export default function App() {
   const insightSourceLabel = state.plan.insightSource === "ai" ? "AI 심층 분석" : state.plan.insightSource === "edited" ? "수정된 분석 초안" : "기본 CSV 분석";
   const selectedHours = selectedModules.reduce((sum, module) => sum + module.hours, 0);
   const errorCount = validations.filter((item) => item.level === "error").length;
+  const isAiBusy = aiDraftingTask !== null || moduleDraftingId !== null;
 
   function patchState(patch: Partial<AppState>) {
     setState((current) => ({ ...current, ...patch }));
@@ -196,6 +200,7 @@ export default function App() {
     }
 
     setAiStatus("AI 초안 생성 중");
+    setAiDraftingTask(task);
     try {
       const draft = await generateAiDraft({
         task,
@@ -250,6 +255,8 @@ export default function App() {
       setAiStatus("AI 초안 생성 완료");
     } catch (error) {
       setAiStatus(error instanceof Error ? error.message : "AI 초안 생성 실패");
+    } finally {
+      setAiDraftingTask(null);
     }
   }
 
@@ -557,6 +564,12 @@ export default function App() {
         {state.activeTab === "guide" && scheduleStatus && <div className="notice scheduleNotice"><CalendarDays size={17} />{scheduleStatus}</div>}
         {state.activeTab === "guide" && aiStatus && <div className="notice aiNotice"><Sparkles size={17} />{aiStatus}</div>}
         {state.activeTab === "guide" && recordingStatus && <div className="notice recordingNotice"><Mic size={17} />{recordingStatus}</div>}
+        {isAiBusy && state.activeTab !== "guide" && (
+          <div className="aiBusyBanner">
+            <LottiePlayer animationData={aiAnalysisLoader} className="aiBusyAnimation small" label="AI 분석중" />
+            <span>{moduleDraftingId !== null ? `${moduleDraftingId}번 과정 AI 초안 작성중` : "AI 분석중"}</span>
+          </div>
+        )}
 
         {state.activeTab === "diagnosis" && (
           <section className="grid">
@@ -565,12 +578,12 @@ export default function App() {
                 <p className="eyebrow">{insightSourceLabel}</p>
                 <h2>{insights.average ? `${insights.average.toFixed(2)}점` : "CSV를 업로드하세요"}</h2>
                 <p>{diagnosisSummary}</p>
-                <button className="button primary inlineAction" onClick={() => runAiDraft("diagnosis")}>
-                  <Sparkles size={17} />
-                  AI로 심층 분석
+                <button className="button primary inlineAction" onClick={() => runAiDraft("diagnosis")} disabled={aiDraftingTask === "diagnosis"}>
+                  {aiDraftingTask === "diagnosis" ? <LottiePlayer animationData={aiAnalysisLoader} className="buttonLottie" label="AI 분석중" /> : <Sparkles size={17} />}
+                  {aiDraftingTask === "diagnosis" ? "AI 분석중" : "AI로 심층 분석"}
                 </button>
               </div>
-              <BarChart3 className="heroIcon" />
+              {aiDraftingTask === "diagnosis" ? <LottiePlayer animationData={aiAnalysisLoader} className="heroLottie" label="AI 분석중" /> : <BarChart3 className="heroIcon" />}
             </article>
             <article className="panel wide">
               <h2>과정별 평균 점수</h2>
@@ -726,9 +739,9 @@ export default function App() {
                     {isRecording ? <Square size={17} /> : <Mic size={17} />}
                     {isRecording ? "녹음 정지" : "녹음 시작"}
                   </button>
-                  <button className="button primary" onClick={() => runAiDraft("interview-plan")}>
-                    <Sparkles size={17} />
-                    AI 초안
+                  <button className="button primary" onClick={() => runAiDraft("interview-plan")} disabled={aiDraftingTask === "interview-plan"}>
+                    {aiDraftingTask === "interview-plan" ? <LottiePlayer animationData={aiAnalysisLoader} className="buttonLottie" label="AI 분석중" /> : <Sparkles size={17} />}
+                    {aiDraftingTask === "interview-plan" ? "AI 분석중" : "AI 초안"}
                   </button>
                 </div>
               </div>
@@ -758,9 +771,9 @@ export default function App() {
                   <h2>프로그램 초안·기대효과 작성</h2>
                   <p>사람이 정한 차시, 방식, 일정, 시간, 장소, 희망 주제는 유지하고, 선택된 과정의 프로그램명·우리학교 목소리·세부 프로그램 초안·기대효과만 작성합니다.</p>
                 </div>
-                <button className="button primary" onClick={() => runAiDraft("module-content")}>
-                  <Sparkles size={17} />
-                  AI 초안 작성
+                <button className="button primary" onClick={() => runAiDraft("module-content")} disabled={aiDraftingTask === "module-content"}>
+                  {aiDraftingTask === "module-content" ? <LottiePlayer animationData={aiAnalysisLoader} className="buttonLottie" label="AI 분석중" /> : <Sparkles size={17} />}
+                  {aiDraftingTask === "module-content" ? "AI 작성중" : "AI 초안 작성"}
                 </button>
               </div>
               {state.modules.map((module) => (
@@ -776,7 +789,7 @@ export default function App() {
                     </label>
                   </div>
                   <button className="button primary compact moduleDraftButton" onClick={() => runModuleDraft(module.id)} disabled={moduleDraftingId === module.id}>
-                    <Sparkles size={15} />
+                    {moduleDraftingId === module.id ? <LottiePlayer animationData={aiAnalysisLoader} className="buttonLottie" label="AI 분석중" /> : <Sparkles size={15} />}
                     {moduleDraftingId === module.id ? "작성 중" : "AI 초안 작성"}
                   </button>
                   <p className="moduleDescription">{module.description}</p>
@@ -839,9 +852,9 @@ export default function App() {
                   <h2>운영계획서 작성</h2>
                   <p className="formHint">운영계획서.pdf 양식 순서(Ⅰ 현황 → Ⅱ 강점·과제 → Ⅲ 면담 요약 → Ⅳ 이슈→목표 → Ⅴ 로드맵)대로 출력됩니다. Ⅰ장 현황·진단 분석은 진단 분석 탭에서 편집합니다.</p>
                 </div>
-                <button className="button primary" onClick={() => runAiDraft("interview-plan")}>
-                  <Sparkles size={17} />
-                  AI 초안
+                <button className="button primary" onClick={() => runAiDraft("interview-plan")} disabled={aiDraftingTask === "interview-plan"}>
+                  {aiDraftingTask === "interview-plan" ? <LottiePlayer animationData={aiAnalysisLoader} className="buttonLottie" label="AI 분석중" /> : <Sparkles size={17} />}
+                  {aiDraftingTask === "interview-plan" ? "AI 분석중" : "AI 초안"}
                 </button>
               </div>
             </div>

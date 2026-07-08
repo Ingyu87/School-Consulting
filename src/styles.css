@@ -39,6 +39,7 @@ h2 { margin: 0 0 16px; font-size: 19px; color: var(--navy); }
 .button { min-height: 42px; display: inline-flex; align-items: center; gap: 8px; border-radius: 8px; border: 1px solid var(--line); padding: 0 14px; background: #fff; cursor: pointer; color: var(--ink); }
 .button.primary { background: var(--blue); color: #fff; border-color: var(--blue); }
 .button:disabled { opacity: .62; cursor: wait; }
+.buttonLottie { width: 22px; height: 22px; flex: 0 0 22px; }
 .button.dangerButton { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
 .button.ghost input { display: none; }
 .button.compact { min-height: 36px; padding: 0 11px; font-size: 13px; }
@@ -49,6 +50,8 @@ h2 { margin: 0 0 16px; font-size: 19px; color: var(--navy); }
 .aiNotice { display: flex; align-items: center; gap: 8px; background: #eef2ff; border-color: #a5b4fc; color: #3730a3; }
 .scheduleNotice { display: flex; align-items: center; gap: 8px; background: #ecfdf5; border-color: #86efac; color: #166534; }
 .recordingNotice { display: flex; align-items: center; gap: 8px; background: #fff7ed; border-color: #fdba74; color: #9a3412; }
+.aiBusyBanner { margin-bottom: 14px; display: inline-flex; align-items: center; gap: 10px; min-height: 46px; padding: 8px 14px 8px 10px; border: 1px solid #a5b4fc; border-radius: 8px; background: #eef2ff; color: #283593; font-weight: 800; box-shadow: 0 8px 18px rgba(31, 74, 168, .08); }
+.aiBusyAnimation.small { width: 40px; height: 30px; flex: 0 0 40px; }
 .inlineAction { margin-top: 14px; }
 .sectionToolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
 .sectionToolbar h2 { margin: 0; }
@@ -59,6 +62,7 @@ h2 { margin: 0 0 16px; font-size: 19px; color: var(--navy); }
 .heroPanel { display: flex; justify-content: space-between; gap: 18px; background: linear-gradient(135deg, #ffffff, #edf6ff); }
 .heroPanel h2 { font-size: 42px; color: var(--blue); margin-bottom: 8px; }
 .heroIcon { color: var(--blue); width: 72px; height: 72px; flex: 0 0 auto; }
+.heroLottie { width: 130px; height: 100px; flex: 0 0 130px; align-self: center; }
 .bars { display: grid; gap: 12px; }
 .barRow { display: grid; grid-template-columns: minmax(150px, 280px) 1fr 58px; align-items: center; gap: 12px; }
 .barRow span { color: var(--muted); font-size: 14px; }
