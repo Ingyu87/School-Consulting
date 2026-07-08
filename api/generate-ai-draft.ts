@@ -21,13 +21,13 @@ export default async function handler(request: any, response: any) {
       model,
       contents: buildPrompt(body),
       config: {
-        temperature: 0.35,
+        temperature: 0.25,
         responseMimeType: "application/json"
       }
     });
 
     const text = result.text ?? "{}";
-    return response.status(200).json(parseJson(text));
+    return response.status(200).json(parseJsonObject(text));
   } catch (error) {
     const message = error instanceof Error ? error.message : "AI 초안 생성 중 오류가 발생했습니다.";
     return response.status(500).send(message);
@@ -35,113 +35,161 @@ export default async function handler(request: any, response: any) {
 }
 
 function buildPrompt(body: any) {
+  const task = body?.task;
+  const moduleId = body?.moduleId;
   const safeBody = {
-    task: body?.task,
+    task,
+    moduleId,
     schoolName: body?.schoolName,
     moduleScores: body?.project?.moduleScores ?? [],
     infrastructureDistributions: body?.project?.infrastructureDistributions ?? [],
     openEndedQuestions: body?.project?.openEndedQuestions ?? [],
     school: body?.school ?? {},
-    modules: (body?.modules ?? []).map((module: any) => ({
-      id: module.id,
-      name: module.name,
-      required: module.required,
-      selected: module.selected,
-      target: module.target,
-      hours: module.hours,
-      date: module.date,
-      time: module.time,
-      place: module.place,
-      headcount: module.headcount,
-      method: module.method,
-      mainTool: module.mainTool,
-      topic: module.topic,
-      programName: module.programName,
-      schoolVoice: module.schoolVoice,
-      description: module.description,
-      editableProgram: module.editableProgram,
-      expectedEffect: module.expectedEffect,
-      materials: module.materials
-    })),
+    modules: (body?.modules ?? [])
+      .filter((module: any) => task !== "module-content" || moduleId === undefined || module.id === moduleId)
+      .map((module: any) => ({
+        id: module.id,
+        name: module.name,
+        required: module.required,
+        selected: module.selected,
+        target: module.target,
+        hours: module.hours,
+        date: module.date,
+        time: module.time,
+        place: module.place,
+        headcount: module.headcount,
+        method: module.method,
+        mainTool: module.mainTool,
+        topic: module.topic,
+        programName: module.programName,
+        schoolVoice: module.schoolVoice,
+        description: module.description,
+        editableProgram: module.editableProgram,
+        expectedEffect: module.expectedEffect,
+        materials: module.materials
+      })),
     interview: body?.interview ?? {},
     plan: body?.plan ?? {}
   };
 
-  return `너는 초등학교 찾아가는 학교 컨설팅 심층면담지·운영계획서 작성 보조자다.
+  return `You help write Korean elementary-school consulting documents for AI/digital education.
 
-반드시 지킬 원칙:
-- 한국어 공식 문서체로 쓴다.
-- 모든 내용은 초안이며, 확정처럼 쓰지 않는다.
-- PDF 공식 운영 기준에 없는 운영 가능/불가를 단정하지 않는다.
-- CSV 일정은 확정 일정으로 쓰지 않는다.
-- 심층면담 장소는 반드시 학교명과 같은 학교로 둔다.
-- 식사, 다과, 직무이수, 온라인 가능 여부는 주어진 기준 안에서만 조심스럽게 표현한다.
-- 개인정보, 연락처, 계정 ID를 만들거나 추정하지 않는다.
-- 진단 분석은 단조로운 점수 나열이 아니라 강점, 보완 영역, 면담 확인 질문, 연수 구성 연결까지 포함한다.
-- 요청 작업이 diagnosis인 경우 CSV의 과정별 점수, 단계, 인프라 응답, 서술형 응답을 근거로 모듈별 시사점과 우리학교 강점 1·2, 도전과제 1·2, 이슈→목표 3쌍을 작성한다.
-- 모듈별 시사점은 점수만 반복하지 말고 해당 모듈이 연수 구성과 심층면담 확인 질문으로 어떻게 이어지는지 적는다.
-- issueGoals는 진단 점수·인프라 응답·학교 요구를 종합해 학교의 이슈 사항 → 연수로 해결할 목표를 도출하고, 연수 기획과 논리적으로 이어지게 한다.
-- 요청 작업이 interview-plan인 경우 이미 작성된 운영계획, 선택된 연수 구성, 스케줄, 진단 시사점을 바탕으로 심층면담지의 기타 고려사항(선행 수준/인프라/학교 요청/기타 확인 네 구분)과 면담 핵심 결과, 연수 참여 목표 요약, 이슈→목표, 로드맵 방향을 작성한다.
-- 요청 작업이 interview-plan인 경우 새로운 차시, 일정, 장소를 만들지 말고 입력된 연수 구성과 운영계획을 요약·정리한다.
-- 요청 작업이 module-content인 경우 차시, 방식, 일정, 시간, 장소, 인원, 희망 주제, 선택 여부는 절대 변경하지 않는다.
-- 요청 작업이 module-content인 경우 사람이 입력한 희망 주제와 진단 결과를 바탕으로 프로그램명, 우리학교 목소리(해당 모듈과 관련해 면담·진단에서 확인된 학교의 요구 한두 문장), 세부 프로그램 초안, 기대효과, 준비물/확인사항만 작성한다.
-- 날짜와 시간은 어떤 경우에도 임의로 만들지 않는다.
+Return exactly one valid JSON object. Do not wrap it in markdown. Do not add explanations before or after JSON.
 
-공식 운영 기준:
-- 총 5개 과정, 12차시 이상 의무 개설 (필수과정 2개 + 선택과정 3개)
-- 필수 과정은 모듈0과 모듈7이며 각 1차시, 모듈0은 최초·모듈7은 마지막 운영
-- 필수 제외 최대 15차시, 필수 포함 최대 17차시
-- 모듈1, 모듈2, 모듈3 합계는 최대 5차시
-- 교원 대상 연수는 모듈 단위로 최소 2차시 이상
-- 오프라인 원칙, 부득이한 경우 전체 30% 이내에서 모듈1~6 온라인 가능
-- 학부모, 학생, 온라인 연수는 식사/다과 미제공
-- 식사 시간은 연수 차시에 포함하지 않음
+General rules:
+- Write in polished Korean suitable for official school consulting drafts.
+- Treat every generated sentence as a draft, not a confirmed fact.
+- Do not invent dates, times, places, headcount, contacts, accounts, or personal information.
+- Do not change user-entered schedule fields.
+- If the school is in Seoul, refer to student digital devices as "디벗" when that wording is relevant.
 
-요청 작업: ${safeBody.task}
+Task rules:
+- task "diagnosis": analyze module scores, stages, infrastructure/open-ended responses, and school needs. Produce:
+  diagnosisInsight, diagnosisImplications for modules 0-7, strength1, strength2, challenge1, challenge2, issueGoals, roadmapDirection, roadmapNotes.
+  Do not repeat survey questions as analysis. Convert scores and responses into implications.
+- task "interview-plan": summarize and refine existing interview/plan content. Do not create new schedules.
+- task "module-content": only write programName, schoolVoice, editableProgram, expectedEffect, materials for the provided module(s).
+  Do not change hours, method, date, time, place, headcount, topic, selected.
+  If moduleId is present, return exactly one moduleUpdates item for that moduleId.
 
-반드시 아래 JSON 객체만 반환한다. 요청 작업과 관련 없는 키는 생략해도 된다. 마크다운 코드블록은 쓰지 않는다.
+Official operation constraints to respect in wording:
+- Total training should be at least 12 hours across 5 courses: required modules 0 and 7 plus 3 selected courses.
+- Module 0 and module 7 are required, each 1 hour. Module 0 is first; module 7 is last.
+- Selected teacher courses should be at least 2 hours per module.
+- Meals/snacks are mentioned only when explicitly allowed by the official guide.
+
+JSON shape:
 {
-  "diagnosisInsight": "운영계획서 Ⅰ장에 들어갈 2~4문단 분석 초안",
+  "diagnosisInsight": "2-4 paragraph analysis draft",
   "diagnosisImplications": {
-    "0": "모듈0 시사점", "1": "모듈1 시사점", "2": "모듈2 시사점", "3": "모듈3 시사점",
-    "4": "모듈4 시사점", "5": "모듈5 시사점", "6": "모듈6 시사점", "7": "모듈7 시사점"
+    "0": "module 0 implication",
+    "1": "module 1 implication",
+    "2": "module 2 implication",
+    "3": "module 3 implication",
+    "4": "module 4 implication",
+    "5": "module 5 implication",
+    "6": "module 6 implication",
+    "7": "module 7 implication"
   },
-  "strength1": "우리학교 강점 1 (첫 줄은 제목, 이후 · 로 시작하는 근거 2~3줄)",
-  "strength2": "우리학교 강점 2",
-  "challenge1": "도전 과제 1",
-  "challenge2": "도전 과제 2",
-  "priorLevel": "기타 고려사항 - 선행 수준 확인",
-  "infraConsiderations": "기타 고려사항 - 인프라 환경(인적/물적) 고려사항. 장소는 ${safeBody.schoolName} 기준",
-  "schoolRequests": "기타 고려사항 - 학교 측 별도 요청사항",
-  "additionalChecks": "기타 고려사항 - 기타 확인 필요사항",
-  "participationGoal": "면담 대상 학교의 연수 참여 목표 요약",
-  "interviewResultSummary": "심층면담 결과 핵심 요약 초안",
-  "interviewSummary": "운영계획서용 심층면담 결과 요약 초안",
+  "strength1": "강점 01 title and 2-3 evidence bullets in prose",
+  "strength2": "강점 02 title and 2-3 evidence bullets in prose",
+  "challenge1": "과제 01 title and 2-3 evidence bullets in prose",
+  "challenge2": "과제 02 title and 2-3 evidence bullets in prose",
+  "priorLevel": "existing practice check draft",
+  "infraConsiderations": "infrastructure considerations draft",
+  "schoolRequests": "school request draft",
+  "additionalChecks": "additional checks draft",
+  "participationGoal": "participation goal draft",
+  "interviewResultSummary": "interview result summary draft",
+  "interviewSummary": "plan interview summary draft",
   "issueGoals": [
-    { "issue": "이슈 01", "goal": "목표 01" },
-    { "issue": "이슈 02", "goal": "목표 02" },
-    { "issue": "이슈 03", "goal": "목표 03" }
+    { "issue": "issue 01", "goal": "goal 01" },
+    { "issue": "issue 02", "goal": "goal 02" },
+    { "issue": "issue 03", "goal": "goal 03" }
   ],
-  "roadmapDirection": "우리학교 혁신 로드맵 방향 1~2문장",
-  "roadmapNotes": "로드맵 및 기대효과 종합 초안",
+  "roadmapDirection": "roadmap direction",
+  "roadmapNotes": "roadmap and expected effect summary",
   "moduleUpdates": [
     {
       "id": 0,
-      "programName": "프로그램명(주제)",
-      "schoolVoice": "우리학교 목소리",
-      "editableProgram": "차시별 세부 프로그램 초안",
-      "expectedEffect": "기대효과",
-      "materials": "준비물/확인사항"
+      "programName": "program name",
+      "schoolVoice": "school voice",
+      "editableProgram": "detailed program draft",
+      "expectedEffect": "expected effect",
+      "materials": "materials/checklist"
     }
   ],
-  "warnings": ["확인 필요 사항"]
+  "warnings": []
 }
 
-입력 데이터:
+Input data:
 ${JSON.stringify(safeBody, null, 2)}`;
 }
 
-function parseJson(text: string) {
-  const trimmed = text.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "");
-  return JSON.parse(trimmed);
+function parseJsonObject(text: string) {
+  const trimmed = text.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const jsonText = extractFirstJsonObject(trimmed);
+    if (!jsonText) {
+      throw new Error("AI 응답을 JSON으로 해석하지 못했습니다. 다시 시도해주세요.");
+    }
+    return JSON.parse(jsonText);
+  }
+}
+
+function extractFirstJsonObject(text: string) {
+  const start = text.indexOf("{");
+  if (start < 0) return "";
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = start; index < text.length; index += 1) {
+    const char = text[index];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === "\"") {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === "\"") {
+      inString = true;
+    } else if (char === "{") {
+      depth += 1;
+    } else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) return text.slice(start, index + 1);
+    }
+  }
+
+  return "";
 }

@@ -137,7 +137,7 @@ export type PlanState = {
   insightSource: "basic" | "ai" | "edited";
 };
 
-export type AppTab = "diagnosis" | "school" | "interview" | "modules" | "plan" | "export";
+export type AppTab = "diagnosis" | "school" | "interview" | "modules" | "plan" | "guide" | "export";
 
 export type AppState = {
   activeTab: AppTab;
@@ -151,6 +151,7 @@ export type AppState = {
 
 export type AiDraftRequest = {
   task: "diagnosis" | "interview-plan" | "module-content";
+  moduleId?: number;
   schoolName: string;
   project: ParsedDiagnosisProject | null;
   school: SchoolInfo;

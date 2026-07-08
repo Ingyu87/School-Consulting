@@ -26,7 +26,7 @@ import { parseLectureScheduleCsv } from "./lib/csv/parseLectureScheduleCsv";
 import { downloadInterviewDocx, downloadPlanDocx } from "./lib/docx/exportDocs";
 import { clearState, loadState, saveState } from "./lib/storage";
 import { validateModules } from "./lib/validation";
-import type { AiModuleUpdate, AppState, InterviewState, PlanState, SchoolInfo, TrainingModule } from "./types";
+import type { AiModuleUpdate, AppState, InterviewState, ModuleScore, PlanState, SchoolInfo, TrainingModule } from "./types";
 
 // Vercel 함수 요청 크기 제한(약 4.5MB) 때문에 긴 면담 녹음은 구간으로 나눠 전사한다.
 const SEGMENT_MS = 180_000;
@@ -40,12 +40,15 @@ const tabs = [
   ["export", "다운로드"]
 ] as const;
 
+const navigationTabs = [...tabs.slice(0, 5), ["guide", "운영 안내"], tabs[5]] as const;
+
 export default function App() {
   const [state, setState] = useState<AppState>(createInitialState);
   const [saveStatus, setSaveStatus] = useState("불러오는 중");
   const [uploadStatus, setUploadStatus] = useState("");
   const [scheduleStatus, setScheduleStatus] = useState("");
   const [aiStatus, setAiStatus] = useState("");
+  const [moduleDraftingId, setModuleDraftingId] = useState<number | null>(null);
   const [recordingStatus, setRecordingStatus] = useState("");
   const [isRecording, setIsRecording] = useState(false);
 
@@ -244,9 +247,49 @@ export default function App() {
           activeTab: task === "diagnosis" ? "diagnosis" : task === "interview-plan" ? "interview" : "modules"
         };
       });
-      setAiStatus(draft.warnings?.length ? `AI 초안 생성 완료 · 확인 필요 ${draft.warnings.length}건` : "AI 초안 생성 완료");
+      setAiStatus("AI 초안 생성 완료");
     } catch (error) {
       setAiStatus(error instanceof Error ? error.message : "AI 초안 생성 실패");
+    }
+  }
+
+  async function runModuleDraft(moduleId: number) {
+    if (!state.project) {
+      setAiStatus("진단 CSV를 먼저 업로드해주세요.");
+      return;
+    }
+
+    const targetModule = state.modules.find((module) => module.id === moduleId);
+    if (!targetModule) return;
+
+    setModuleDraftingId(moduleId);
+    setAiStatus(`${targetModule.id}. ${targetModule.name} AI 초안 생성 중`);
+    try {
+      const draft = await generateAiDraft({
+        task: "module-content",
+        moduleId,
+        schoolName: state.project.schoolName,
+        project: state.project,
+        school: state.school,
+        modules: state.modules,
+        interview: state.interview,
+        plan: state.plan
+      });
+      const update = draft.moduleUpdates?.find((item) => item.id === moduleId);
+      if (!update) {
+        setAiStatus("AI 초안을 받았지만 적용할 과정 내용이 없습니다.");
+        return;
+      }
+      setState((current) => ({
+        ...current,
+        modules: current.modules.map((module) => (module.id === moduleId ? mergeModuleContentUpdate(module, update) : module)),
+        activeTab: "modules"
+      }));
+      setAiStatus(`${targetModule.id}. ${targetModule.name} AI 초안 작성 완료`);
+    } catch (error) {
+      setAiStatus(error instanceof Error ? error.message : "AI 초안 생성 실패");
+    } finally {
+      setModuleDraftingId(null);
     }
   }
 
@@ -466,7 +509,7 @@ export default function App() {
           </div>
         </div>
         <nav className="tabs">
-          {tabs.map(([key, label]) => (
+          {navigationTabs.map(([key, label]) => (
             <button
               className={state.activeTab === key ? "active" : ""}
               key={key}
@@ -510,10 +553,10 @@ export default function App() {
           <span>식사/다과 안내는 PDF 기준만 표시</span>
         </section>
 
-        {uploadStatus && <div className="notice">{uploadStatus}</div>}
-        {scheduleStatus && <div className="notice scheduleNotice"><CalendarDays size={17} />{scheduleStatus}</div>}
-        {aiStatus && <div className="notice aiNotice"><Sparkles size={17} />{aiStatus}</div>}
-        {recordingStatus && <div className="notice recordingNotice"><Mic size={17} />{recordingStatus}</div>}
+        {state.activeTab === "guide" && uploadStatus && <div className="notice">{uploadStatus}</div>}
+        {state.activeTab === "guide" && scheduleStatus && <div className="notice scheduleNotice"><CalendarDays size={17} />{scheduleStatus}</div>}
+        {state.activeTab === "guide" && aiStatus && <div className="notice aiNotice"><Sparkles size={17} />{aiStatus}</div>}
+        {state.activeTab === "guide" && recordingStatus && <div className="notice recordingNotice"><Mic size={17} />{recordingStatus}</div>}
 
         {state.activeTab === "diagnosis" && (
           <section className="grid">
@@ -544,6 +587,27 @@ export default function App() {
               </div>
             </article>
             <article className="panel wide">
+              <h2>우리학교 강점과 디지털 기반 교육 혁신을 위한 도전 과제</h2>
+              <div className="insightCardGrid">
+                <div className="insightBox strength">
+                  <span>강점 01</span>
+                  <p>{state.plan.strength1 || deriveStrengthText(insights.highs[0])}</p>
+                </div>
+                <div className="insightBox strength dark">
+                  <span>강점 02</span>
+                  <p>{state.plan.strength2 || deriveStrengthText(insights.highs[1])}</p>
+                </div>
+                <div className="insightBox challenge">
+                  <span>과제 01</span>
+                  <p>{state.plan.challenge1 || deriveChallengeText(insights.lows[0])}</p>
+                </div>
+                <div className="insightBox challenge dark">
+                  <span>과제 02</span>
+                  <p>{state.plan.challenge2 || deriveChallengeText(insights.lows[1])}</p>
+                </div>
+              </div>
+            </article>
+            <article className="panel wide">
               <h2>사전 진단 - 과정별 진단 분석 결과</h2>
               <div className="tableScroller">
                 <table className="diagnosisTable">
@@ -552,8 +616,7 @@ export default function App() {
                       <th>구분</th>
                       <th>평균 점수</th>
                       <th>단계</th>
-                      <th>자가 진단 분석 결과</th>
-                      <th>시사점</th>
+                      <th>자가 진단 분석 결과 및 시사점</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -562,15 +625,14 @@ export default function App() {
                         <td>모듈{score.moduleId}<br />{score.moduleName}</td>
                         <td>{score.score.toFixed(2)}</td>
                         <td>{score.stage}</td>
-                        <td>{score.question || `${score.moduleName} 영역의 평균 점수는 ${score.score.toFixed(2)}점입니다.`}</td>
-                        <td>{state.plan.diagnosisImplications?.[String(score.moduleId)] || "AI로 심층 분석을 실행하면 CSV 결과를 바탕으로 시사점이 작성됩니다."}</td>
+                        <td>{state.plan.diagnosisImplications?.[String(score.moduleId)] || diagnosisResultText(score)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             </article>
-            {(state.project?.infrastructureDistributions.length ?? 0) > 0 && (
+            {false && (state.project?.infrastructureDistributions.length ?? 0) > 0 && (
               <article className="panel wide">
                 <h2>학교 디지털 기반 교육 현황 — 문항별 응답 분포</h2>
                 <p className="formHint">운영계획서 Ⅰ장 현황표에 그대로 출력됩니다.</p>
@@ -592,7 +654,7 @@ export default function App() {
                 ))}
               </article>
             )}
-            {(state.project?.openEndedQuestions.length ?? 0) > 0 && (
+            {false && (state.project?.openEndedQuestions.length ?? 0) > 0 && (
               <article className="panel wide">
                 <h2>서술형 응답 정리</h2>
                 {state.project!.openEndedQuestions.map((question) => (
@@ -713,6 +775,10 @@ export default function App() {
                       <span>{module.required ? "필수" : "선택"}</span>
                     </label>
                   </div>
+                  <button className="button primary compact moduleDraftButton" onClick={() => runModuleDraft(module.id)} disabled={moduleDraftingId === module.id}>
+                    <Sparkles size={15} />
+                    {moduleDraftingId === module.id ? "작성 중" : "AI 초안 작성"}
+                  </button>
                   <p className="moduleDescription">{module.description}</p>
                   <div className="moduleGrid">
                     <label>차시<input type="number" min={0} value={module.hours} onChange={(event) => updateModule(module.id, { hours: Number(event.target.value) })} /></label>
@@ -780,6 +846,31 @@ export default function App() {
               </div>
             </div>
             <PlanFormView plan={state.plan} onChange={patchPlan} />
+          </section>
+        )}
+
+        {state.activeTab === "guide" && (
+          <section className="grid">
+            <article className="panel">
+              <h2>PDF 기준 검증</h2>
+              <div className="guideMetric">
+                <strong>{selectedHours}차시 구성</strong>
+                <span>최소 12차시까지 {Math.max(0, 12 - selectedHours)}차시 남음</span>
+                <span className={errorCount ? "danger" : "ok"}>{errorCount ? `${errorCount}개 오류` : "PDF 기준 충족"}</span>
+              </div>
+              {validations.map((item) => (
+                <div className={`rule ${item.level}`} key={item.message}>{item.message}</div>
+              ))}
+            </article>
+            <article className="panel">
+              <h2>운영 안내</h2>
+              <div className="guideList">
+                <p>연수 구성 화면에서는 과정별 희망 주제를 먼저 입력한 뒤 각 과정의 <strong>AI 초안 작성</strong> 버튼을 눌러 세부 프로그램 초안, 기대효과, 준비물/확인사항을 작성합니다.</p>
+                <p>사람이 입력한 차시, 방식, 일정, 시간, 장소, 인원, 희망 주제는 AI가 바꾸지 않도록 요청합니다.</p>
+                <p>서울 지역의 학생용 디지털 기기는 안내 문구에서 <strong>디벗</strong> 표현을 사용할 수 있습니다.</p>
+                <p>식사/다과 가능 여부는 공식 PDF 기준에 근거한 검증 메시지만 확인합니다.</p>
+              </div>
+            </article>
           </section>
         )}
 
@@ -880,6 +971,27 @@ function ScheduleTable({ modules, schoolName }: { modules: TrainingModule[]; sch
       </table>
     </div>
   );
+}
+
+function diagnosisResultText(score: ModuleScore) {
+  const stageLabel = score.score < 3.8 ? "도약" : score.score < 4.6 ? "만족" : "추월";
+  if (score.score < 3.8) {
+    return `${score.moduleName} 영역은 평균 ${score.score.toFixed(2)}점으로 ${stageLabel} 단계입니다. 구성원의 공감대와 실행 기반을 더 촘촘히 확인할 필요가 있으며, 연수에서는 기본 개념 정리와 현장 적용 사례를 함께 다루어 참여 장벽을 낮추는 방향이 적절합니다.`;
+  }
+  if (score.score < 4.6) {
+    return `${score.moduleName} 영역은 평균 ${score.score.toFixed(2)}점으로 ${stageLabel} 단계입니다. 기본적인 이해와 실행 의지는 형성되어 있으므로, 연수에서는 학교 상황에 맞는 실습과 공동 설계 활동을 통해 실제 수업·업무 적용력을 높이는 데 초점을 둘 필요가 있습니다.`;
+  }
+  return `${score.moduleName} 영역은 평균 ${score.score.toFixed(2)}점으로 ${stageLabel} 단계입니다. 이미 높은 실행 기반을 갖춘 강점 영역이므로, 연수에서는 우수 사례를 공유하고 다른 과정과 연결해 학교 전체의 지속 가능한 혁신 체계로 확산하는 방향이 적절합니다.`;
+}
+
+function deriveStrengthText(score?: ModuleScore) {
+  if (!score) return "AI 심층 분석을 실행하면 진단 결과를 바탕으로 강점이 작성됩니다.";
+  return `${score.moduleName} 영역의 응답 수준이 상대적으로 높아 학교 구성원의 기본 이해와 참여 기반이 확인됩니다. 이 강점을 연수 전반의 실행 동력으로 활용할 수 있습니다.`;
+}
+
+function deriveChallengeText(score?: ModuleScore) {
+  if (!score) return "AI 심층 분석을 실행하면 진단 결과를 바탕으로 도전 과제가 작성됩니다.";
+  return `${score.moduleName} 영역은 우선 보완이 필요한 지점입니다. 연수에서 구체적인 사례, 실습, 적용 계획을 함께 다루어 현장 실행력을 높일 필요가 있습니다.`;
 }
 
 function mergeModuleAiUpdate(module: TrainingModule, update: AiModuleUpdate, schoolName: string): TrainingModule {
