@@ -76,7 +76,7 @@ export type AppState = {
 };
 
 export type AiDraftRequest = {
-  task: "diagnosis" | "interview-plan" | "training-plan";
+  task: "diagnosis" | "interview-plan" | "module-content";
   schoolName: string;
   project: ParsedDiagnosisProject | null;
   modules: TrainingModule[];

@@ -158,7 +158,7 @@ export default function App() {
     }));
   }
 
-  async function runAiDraft(task: "diagnosis" | "interview-plan" | "training-plan") {
+  async function runAiDraft(task: "diagnosis" | "interview-plan" | "module-content") {
     if (!state.project) {
       setAiStatus("진단 CSV를 먼저 업로드해주세요.");
       return;
@@ -176,11 +176,11 @@ export default function App() {
       });
 
       setState((current) => {
-        const nextModules = draft.moduleUpdates?.length
+        const nextModules = task === "module-content" && draft.moduleUpdates?.length
           ? current.modules.map((module) => {
               const update = draft.moduleUpdates?.find((item) => item.id === module.id);
               if (!update) return module;
-              return mergeModuleAiUpdate(module, update, current.project?.schoolName ?? "");
+              return mergeModuleContentUpdate(module, update);
             })
           : current.modules;
 
@@ -399,13 +399,25 @@ export default function App() {
             <div className="moduleCards">
               <div className="panel moduleAiPanel">
                 <div>
-                  <p className="eyebrow">연수 구성 도우미</p>
-                  <h2>진단 결과 기반 구성안</h2>
-                  <p>AI가 낮은 영역과 학교 면담 메모를 연결해 12차시 이상 구성안을 제안합니다. 제안 뒤에도 PDF 기준 검증을 다시 확인하세요.</p>
+                  <p className="eyebrow">선택 입력</p>
+                  <h2>강의종합 CSV 일정 반영</h2>
+                  <p>강의종합 CSV가 있는 학교만 업로드하세요. 없으면 직접 차시, 방식, 일정, 시간, 장소, 희망 주제를 입력하면 됩니다.</p>
                 </div>
-                <button className="button primary" onClick={() => runAiDraft("training-plan")}>
+                <label className="button ghost">
+                  <CalendarDays size={17} />
+                  강의종합 CSV
+                  <input type="file" accept=".csv" onChange={(event) => event.target.files?.[0] && handleLectureScheduleCsv(event.target.files[0])} />
+                </label>
+              </div>
+              <div className="panel moduleAiPanel">
+                <div>
+                  <p className="eyebrow">AI 작성 보조</p>
+                  <h2>프로그램 초안·기대효과 작성</h2>
+                  <p>사람이 정한 차시, 방식, 일정, 시간, 장소, 희망 주제는 유지하고, 선택된 과정의 세부 프로그램 초안과 기대효과만 작성합니다.</p>
+                </div>
+                <button className="button primary" onClick={() => runAiDraft("module-content")}>
                   <Sparkles size={17} />
-                  AI 구성안 만들기
+                  AI 초안 작성
                 </button>
               </div>
               {state.modules.map((module) => (
@@ -481,14 +493,6 @@ export default function App() {
                 </button>
               </div>
               <ScheduleTable modules={selectedModules} schoolName={state.project?.schoolName ?? "새학교"} />
-              <div className="optionalImport">
-                <span>강의종합 CSV가 있으면 일정 가안을 자동 반영할 수 있습니다.</span>
-                <label className="button ghost compact">
-                  <CalendarDays size={16} />
-                  선택 업로드
-                  <input type="file" accept=".csv" onChange={(event) => event.target.files?.[0] && handleLectureScheduleCsv(event.target.files[0])} />
-                </label>
-              </div>
             </article>
             <article className="panel downloadCard">
               <FileText size={34} />
@@ -591,6 +595,15 @@ function mergeModuleAiUpdate(module: TrainingModule, update: NonNullable<Awaited
     expectedEffect: update.expectedEffect ?? module.expectedEffect,
     materials: update.materials ?? module.materials,
     place: update.place || module.place || schoolName
+  };
+}
+
+function mergeModuleContentUpdate(module: TrainingModule, update: NonNullable<Awaited<ReturnType<typeof generateAiDraft>>["moduleUpdates"]>[number]): TrainingModule {
+  return {
+    ...module,
+    editableProgram: update.editableProgram ?? module.editableProgram,
+    expectedEffect: update.expectedEffect ?? module.expectedEffect,
+    materials: update.materials ?? module.materials
   };
 }
 
