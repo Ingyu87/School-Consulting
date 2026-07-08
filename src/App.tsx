@@ -638,7 +638,14 @@ export default function App() {
                         <td>모듈{score.moduleId}<br />{score.moduleName}</td>
                         <td>{score.score.toFixed(2)}</td>
                         <td>{score.stage}</td>
-                        <td>{state.plan.diagnosisImplications?.[String(score.moduleId)] || diagnosisResultText(score)}</td>
+                        <td>
+                          <div className="diagnosisResultCell">
+                            <strong>분석 결과</strong>
+                            <p>{diagnosisResultText(score)}</p>
+                            <strong>시사점</strong>
+                            <p>{state.plan.diagnosisImplications?.[String(score.moduleId)] || diagnosisImplicationText(score)}</p>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -989,12 +996,22 @@ function ScheduleTable({ modules, schoolName }: { modules: TrainingModule[]; sch
 function diagnosisResultText(score: ModuleScore) {
   const stageLabel = score.score < 3.8 ? "도약" : score.score < 4.6 ? "만족" : "추월";
   if (score.score < 3.8) {
-    return `${score.moduleName} 영역은 평균 ${score.score.toFixed(2)}점으로 ${stageLabel} 단계입니다. 구성원의 공감대와 실행 기반을 더 촘촘히 확인할 필요가 있으며, 연수에서는 기본 개념 정리와 현장 적용 사례를 함께 다루어 참여 장벽을 낮추는 방향이 적절합니다.`;
+    return `${score.moduleName} 영역은 평균 ${score.score.toFixed(2)}점으로 ${stageLabel} 단계입니다. 구성원의 공감대와 실행 기반을 더 촘촘히 확인할 필요가 있는 영역으로 해석됩니다.`;
   }
   if (score.score < 4.6) {
-    return `${score.moduleName} 영역은 평균 ${score.score.toFixed(2)}점으로 ${stageLabel} 단계입니다. 기본적인 이해와 실행 의지는 형성되어 있으므로, 연수에서는 학교 상황에 맞는 실습과 공동 설계 활동을 통해 실제 수업·업무 적용력을 높이는 데 초점을 둘 필요가 있습니다.`;
+    return `${score.moduleName} 영역은 평균 ${score.score.toFixed(2)}점으로 ${stageLabel} 단계입니다. 기본적인 이해와 실행 의지는 형성되어 있으나, 실제 수업·업무 적용 경험을 더 넓힐 여지가 있습니다.`;
   }
-  return `${score.moduleName} 영역은 평균 ${score.score.toFixed(2)}점으로 ${stageLabel} 단계입니다. 이미 높은 실행 기반을 갖춘 강점 영역이므로, 연수에서는 우수 사례를 공유하고 다른 과정과 연결해 학교 전체의 지속 가능한 혁신 체계로 확산하는 방향이 적절합니다.`;
+  return `${score.moduleName} 영역은 평균 ${score.score.toFixed(2)}점으로 ${stageLabel} 단계입니다. 이미 높은 실행 기반을 갖춘 강점 영역으로 볼 수 있습니다.`;
+}
+
+function diagnosisImplicationText(score: ModuleScore) {
+  if (score.score < 3.8) {
+    return `시사점: 연수에서는 기본 개념 정리, 안전한 실습, 구성원 간 공감대 형성을 우선 배치하고 사전면담에서 참여 장벽과 필요한 지원 방식을 구체적으로 확인할 필요가 있습니다.`;
+  }
+  if (score.score < 4.6) {
+    return `시사점: 학교 상황에 맞는 실습과 공동 설계 활동을 통해 현재의 이해 수준을 실제 적용력으로 전환하고, 과정별 산출물이 수업·업무 개선으로 이어지도록 설계할 필요가 있습니다.`;
+  }
+  return `시사점: 강점 영역의 우수 사례를 공유하고 다른 과정과 연결해 학교 전체의 지속 가능한 디지털 교육 운영 모델로 확산하는 방향이 적절합니다.`;
 }
 
 function deriveStrengthText(score?: ModuleScore) {
