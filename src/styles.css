@@ -25,7 +25,10 @@ button, input, textarea, select { font: inherit; }
 .tabs { display: grid; gap: 8px; }
 .tabs button { border: 0; color: #e2e8f0; background: transparent; text-align: left; padding: 12px 14px; border-radius: 8px; cursor: pointer; }
 .tabs button.active, .tabs button:hover { background: rgba(255,255,255,.13); color: #fff; }
-.statusCard { margin-top: auto; display: flex; gap: 8px; align-items: center; color: #dbeafe; font-size: 14px; }
+.sidebarFooter { margin-top: auto; display: grid; gap: 10px; }
+.resetButton { min-height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid rgba(255,255,255,.28); background: rgba(255,255,255,.08); color: #fff; border-radius: 8px; cursor: pointer; }
+.resetButton:hover { background: rgba(255,255,255,.14); }
+.statusCard { display: flex; gap: 8px; align-items: center; color: #dbeafe; font-size: 14px; }
 
 .main { padding: 26px; overflow: auto; }
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 16px; }

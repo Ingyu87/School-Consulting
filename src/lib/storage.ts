@@ -14,3 +14,7 @@ export async function loadState() {
 export async function saveState(state: AppState) {
   await localforage.setItem(STORAGE_KEY, state);
 }
+
+export async function clearState() {
+  await localforage.removeItem(STORAGE_KEY);
+}

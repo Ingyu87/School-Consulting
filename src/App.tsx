@@ -8,6 +8,7 @@ import {
   FileText,
   FolderOpen,
   Mic,
+  RotateCcw,
   Save,
   Sparkles,
   Square,
@@ -20,7 +21,7 @@ import { buildInsights, stageDescriptions, stageTone } from "./lib/diagnosis";
 import { parseDiagnosisCsv } from "./lib/csv/parseDiagnosisCsv";
 import { parseLectureScheduleCsv } from "./lib/csv/parseLectureScheduleCsv";
 import { downloadInterviewDocx, downloadPlanDocx } from "./lib/docx/exportDocs";
-import { loadState, saveState } from "./lib/storage";
+import { clearState, loadState, saveState } from "./lib/storage";
 import { validateModules } from "./lib/validation";
 import type { AppState, TrainingModule } from "./types";
 
@@ -336,6 +337,19 @@ export default function App() {
     setState(JSON.parse(text) as AppState);
   }
 
+  async function resetWorkspace() {
+    const confirmed = window.confirm("현재 입력한 내용과 자동저장된 작업을 모두 지우고 처음부터 시작할까요?");
+    if (!confirmed) return;
+    if (isRecording) stopInterviewRecording();
+    await clearState();
+    setState({ ...initialState, updatedAt: new Date().toISOString() });
+    setUploadStatus("");
+    setScheduleStatus("");
+    setAiStatus("");
+    setRecordingStatus("");
+    setSaveStatus("새 프로젝트");
+  }
+
   return (
     <div className="appShell">
       <aside className="sidebar">
@@ -357,9 +371,15 @@ export default function App() {
             </button>
           ))}
         </nav>
-        <div className="statusCard">
-          <Save size={16} />
-          <span>{saveStatus}</span>
+        <div className="sidebarFooter">
+          <button className="resetButton" onClick={resetWorkspace}>
+            <RotateCcw size={16} />
+            처음부터 시작
+          </button>
+          <div className="statusCard">
+            <Save size={16} />
+            <span>{saveStatus}</span>
+          </div>
         </div>
       </aside>
 
