@@ -7,6 +7,7 @@ import {
   FileDown,
   FileText,
   FolderOpen,
+  HelpCircle,
   Mic,
   RotateCcw,
   Save,
@@ -26,6 +27,7 @@ import { buildInsights, stageDescriptions, stageTone } from "./lib/diagnosis";
 import { parseDiagnosisCsv } from "./lib/csv/parseDiagnosisCsv";
 import { parseLectureScheduleCsv } from "./lib/csv/parseLectureScheduleCsv";
 import { downloadInterviewDocx, downloadPlanDocx } from "./lib/docx/exportDocs";
+import { fetchNeisSchoolInfo, mapNeisToSchoolInfo } from "./lib/neis";
 import { clearState, loadState, saveState } from "./lib/storage";
 import { validateModules } from "./lib/validation";
 import type { AiModuleUpdate, AppState, InterviewState, ModuleScore, PlanState, SchoolInfo, TrainingModule } from "./types";
@@ -54,6 +56,7 @@ export default function App() {
   const [moduleDraftingId, setModuleDraftingId] = useState<number | null>(null);
   const [recordingStatus, setRecordingStatus] = useState("");
   const [isRecording, setIsRecording] = useState(false);
+  const [showHelp, setShowHelp] = useState(true);
 
   const stateRef = useRef(state);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -95,6 +98,7 @@ export default function App() {
   const selectedHours = selectedModules.reduce((sum, module) => sum + module.hours, 0);
   const errorCount = validations.filter((item) => item.level === "error").length;
   const isAiBusy = aiDraftingTask !== null || moduleDraftingId !== null;
+  const help = (text: string) => (showHelp ? { "data-help": text } : {});
 
   function patchState(patch: Partial<AppState>) {
     setState((current) => ({ ...current, ...patch }));
@@ -126,9 +130,19 @@ export default function App() {
         }
       }
       const fresh = createInitialState();
+      let neisPatch: Partial<SchoolInfo> = {};
+      let neisMessage = "";
+      try {
+        const neisInfo = await fetchNeisSchoolInfo(project.schoolName);
+        neisPatch = mapNeisToSchoolInfo(neisInfo);
+        neisMessage = " · 나이스 학교정보 자동 반영";
+      } catch {
+        neisMessage = " · 나이스 자동 조회 건너뜀";
+      }
       setState({
         ...fresh,
         project,
+        school: { ...fresh.school, ...neisPatch },
         activeTab: "diagnosis",
         modules: fresh.modules.map((module) => ({ ...module, place: project.schoolName })),
         plan: { ...fresh.plan, editedInsights: buildInsights(project.moduleScores).draft }
@@ -193,7 +207,7 @@ export default function App() {
     }));
   }
 
-  async function runAiDraft(task: "diagnosis" | "interview-plan" | "module-content") {
+  async function runAiDraft(task: "diagnosis" | "interview-plan" | "module-content", nextTab?: AppState["activeTab"]) {
     if (!state.project) {
       setAiStatus("진단 CSV를 먼저 업로드해주세요.");
       return;
@@ -249,7 +263,7 @@ export default function App() {
             roadmapDirection: draft.roadmapDirection ?? current.plan.roadmapDirection,
             roadmapNotes: draft.roadmapNotes ?? current.plan.roadmapNotes
           },
-          activeTab: task === "diagnosis" ? "diagnosis" : task === "interview-plan" ? "interview" : "modules"
+          activeTab: nextTab ?? (task === "diagnosis" ? "diagnosis" : task === "interview-plan" ? "interview" : "modules")
         };
       });
       setAiStatus("AI 초안 생성 완료");
@@ -521,6 +535,7 @@ export default function App() {
               className={state.activeTab === key ? "active" : ""}
               key={key}
               onClick={() => patchState({ activeTab: key })}
+              {...help(tabHelp(String(key)))}
             >
               {label}
             </button>
@@ -545,7 +560,11 @@ export default function App() {
             <h1>{state.project?.schoolName ?? "학교 컨설팅 문서 생성 웹앱"}</h1>
           </div>
           <div className="actions">
-            <label className="button ghost">
+            <button className={`button ghost ${showHelp ? "activeHelp" : ""}`} onClick={() => setShowHelp((value) => !value)} {...help("주요 버튼과 입력 영역에 마우스를 올렸을 때 설명을 보여주거나 숨깁니다.")}>
+              <HelpCircle size={17} />
+              도움말 {showHelp ? "켜짐" : "꺼짐"}
+            </button>
+            <label className="button ghost" {...help("사전 자가진단 CSV를 업로드하면 진단 분석을 만들고, NEIS_API_KEY가 있으면 학교기본정보도 자동 조회합니다.")}>
               <Upload size={17} />
               진단 CSV
               <input type="file" accept=".csv" onChange={(event) => event.target.files?.[0] && handleCsv(event.target.files[0])} />
@@ -730,7 +749,7 @@ export default function App() {
         )}
 
         {state.activeTab === "school" && (
-          <SchoolInfoForm school={state.school} schoolName={state.project?.schoolName ?? ""} onChange={patchSchool} />
+          <SchoolInfoForm school={state.school} schoolName={state.project?.schoolName ?? ""} showHelp={showHelp} onChange={patchSchool} />
         )}
 
         {state.activeTab === "interview" && (
@@ -859,7 +878,7 @@ export default function App() {
                   <h2>운영계획서 작성</h2>
                   <p className="formHint">운영계획서.pdf 양식 순서(Ⅰ 현황 → Ⅱ 강점·과제 → Ⅲ 면담 요약 → Ⅳ 이슈→목표 → Ⅴ 로드맵)대로 출력됩니다. Ⅰ장 현황·진단 분석은 진단 분석 탭에서 편집합니다.</p>
                 </div>
-                <button className="button primary" onClick={() => runAiDraft("interview-plan")} disabled={aiDraftingTask === "interview-plan"}>
+                <button className="button primary" onClick={() => runAiDraft("interview-plan", "plan")} disabled={aiDraftingTask === "interview-plan"}>
                   {aiDraftingTask === "interview-plan" ? <LottiePlayer animationData={aiAnalysisLoader} className="buttonLottie" label="AI 분석중" /> : <Sparkles size={17} />}
                   {aiDraftingTask === "interview-plan" ? "AI 분석중" : "AI 초안"}
                 </button>
@@ -944,6 +963,19 @@ export default function App() {
       </main>
     </div>
   );
+}
+
+function tabHelp(tab: string) {
+  const guide: Record<string, string> = {
+    diagnosis: "자가진단 CSV를 바탕으로 평균 점수, 강점·과제, 분석 결과와 시사점을 확인하는 화면입니다.",
+    school: "학교 일반사항과 인프라를 입력합니다. CSV 업로드 후 나이스 학교정보가 자동 조회되며, 버튼으로 다시 조회할 수도 있습니다.",
+    interview: "심층면담지 항목을 작성하고 녹음 전사 또는 AI 초안으로 면담 내용을 정리합니다.",
+    modules: "연수 과정을 선택하고 차시, 일정, 희망 주제, 과정별 AI 초안을 작성합니다. 선택하지 않은 과정은 접힙니다.",
+    plan: "운영계획서 본문에 들어갈 강점·과제, 면담 요약, 이슈와 목표, 로드맵을 작성합니다.",
+    guide: "PDF 기준 검증, 상태 메시지, 사용 안내를 모아 확인합니다.",
+    export: "최종 일정표 CSV와 심층면담지/운영계획서 DOCX를 내려받습니다."
+  };
+  return guide[tab] ?? "";
 }
 
 function ScheduleTable({ modules, schoolName }: { modules: TrainingModule[]; schoolName: string }) {
