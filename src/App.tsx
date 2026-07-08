@@ -582,8 +582,8 @@ export default function App() {
         <section className="validationStrip">
           <strong>{selectedHours}차시 구성</strong>
           <span>최소 12차시까지 {Math.max(0, 12 - selectedHours)}차시 남음</span>
-          <span className={errorCount ? "danger" : "ok"}>{errorCount ? `${errorCount}개 오류` : "PDF 기준 충족"}</span>
-          <span>식사/다과 안내는 PDF 기준만 표시</span>
+          <span className={errorCount ? "danger" : "ok"}>{errorCount ? `${errorCount}개 확인 필요` : "운영 기준 충족"}</span>
+          <span>식사와 다과 안내는 공식 운영 기준에 따라 표시됩니다.</span>
         </section>
 
         {state.activeTab === "guide" && uploadStatus && <div className="notice">{uploadStatus}</div>}
@@ -874,7 +874,7 @@ export default function App() {
               ))}
             </div>
             <aside className="panel rules">
-              <h2>PDF 기준 검증</h2>
+              <h2>운영 기준 확인</h2>
               {validations.map((item) => (
                 <div className={`rule ${item.level}`} key={item.message}>{item.message}</div>
               ))}
@@ -903,23 +903,28 @@ export default function App() {
         {state.activeTab === "guide" && (
           <section className="grid">
             <article className="panel">
-              <h2>PDF 기준 검증</h2>
+              <h2>연수 구성 확인</h2>
               <div className="guideMetric">
                 <strong>{selectedHours}차시 구성</strong>
                 <span>최소 12차시까지 {Math.max(0, 12 - selectedHours)}차시 남음</span>
-                <span className={errorCount ? "danger" : "ok"}>{errorCount ? `${errorCount}개 오류` : "PDF 기준 충족"}</span>
+                <span className={errorCount ? "danger" : "ok"}>{errorCount ? `${errorCount}개 확인 필요` : "운영 기준 충족"}</span>
               </div>
               {validations.map((item) => (
                 <div className={`rule ${item.level}`} key={item.message}>{item.message}</div>
               ))}
             </article>
             <article className="panel">
-              <h2>운영 안내</h2>
+              <h2>학교 안내용 운영 안내</h2>
               <div className="guideList">
-                <p>연수 구성 화면에서는 과정별 희망 주제를 먼저 입력한 뒤 각 과정의 <strong>AI 초안 작성</strong> 버튼을 눌러 세부 프로그램 초안, 기대효과, 준비물/확인사항을 작성합니다.</p>
-                <p>사람이 입력한 차시, 방식, 일정, 시간, 장소, 인원, 희망 주제는 AI가 바꾸지 않도록 요청합니다.</p>
-                <p>서울 지역의 학생용 디지털 기기는 안내 문구에서 <strong>디벗</strong> 표현을 사용할 수 있습니다.</p>
-                <p>식사/다과 가능 여부는 공식 PDF 기준에 근거한 검증 메시지만 확인합니다.</p>
+                <p><strong>과정 구성</strong> 총 5개 과정, 12차시 이상 운영합니다. 필수 2개 과정과 선택 3개 과정을 포함합니다.</p>
+                <p><strong>필수 과정</strong> 0과정 ‘우리 학교 알아보기’는 첫 연수로, 7과정 ‘우리 학교 돌아보기’는 마지막 환류 과정으로 운영합니다. 두 과정은 각 1차시이며 오프라인 운영이 원칙입니다.</p>
+                <p><strong>선택 과정</strong> 1~6과정 중 3개 이상을 선택합니다. 교직원·교원·학교 리더 과정은 과정당 2차시 이상을 권장하고, 학생·학부모 과정은 1차시 운영이 가능합니다.</p>
+                <p><strong>차시 조율</strong> 필수 제외 선택 과정은 최대 15차시, 필수 포함 전체 최대 17차시 범위에서 학교와 코디네이터가 협의합니다.</p>
+                <p><strong>운영 방식</strong> 모든 과정은 오프라인이 원칙입니다. 부득이한 경우 1~6과정에 한해 전체 연수 차시의 30% 이내에서 온라인 또는 블렌디드 운영을 협의할 수 있습니다.</p>
+                <p><strong>식사·다과</strong> 사업 기간 내 식사 1회, 간식 3회가 제공됩니다. 리더십 과정 운영 시 예산 범위에서 식사 1회를 추가 제공할 수 있으며, 식사 시간은 연수 차시에 포함하지 않습니다.</p>
+                <p><strong>제공 제외</strong> 학부모·학생·온라인 연수에는 식사와 다과가 제공되지 않습니다.</p>
+                <p><strong>출석과 이수</strong> 연수 시작 전·후 출석 QR 태그가 필요합니다. 교사는 과정별 80% 이상 수강 시 직무이수 처리가 가능합니다.</p>
+                <p><strong>일정 협의</strong> 운영계획서 일정은 운영 준비를 위한 예상 일정이며, 담당교사와 코디네이터가 지속적으로 소통하며 조율합니다.</p>
               </div>
             </article>
           </section>
@@ -985,13 +990,24 @@ function tabHelp(tab: string) {
     interview: "심층면담지 항목을 작성하고 녹음 전사 또는 AI 초안으로 면담 내용을 정리합니다.",
     modules: "연수 과정을 선택하고 차시, 일정, 희망 주제, 과정별 AI 초안을 작성합니다. 선택하지 않은 과정은 접힙니다.",
     plan: "운영계획서 본문에 들어갈 강점·과제, 면담 요약, 이슈와 목표, 로드맵을 작성합니다.",
-    guide: "PDF 기준 검증, 상태 메시지, 사용 안내를 모아 확인합니다.",
+    guide: "학교에 안내할 연수 운영 기준과 현재 구성의 확인 사항을 모아 설명합니다.",
     export: "최종 일정표 CSV와 심층면담지/운영계획서 DOCX를 내려받습니다."
   };
   return guide[tab] ?? "";
 }
 
 function moduleHelp(moduleId: number, modules: TrainingModule[]) {
+  const moduleCourseGuide: Record<number, string> = {
+    0: "0. 우리 학교 알아보기: 필수 과정입니다. 교직원이 사전 자가진단 결과와 학교 여건을 함께 확인하고, 연수 목표와 운영 방향을 맞추는 1차시 오프라인 과정입니다.",
+    1: "1. 학교 AI·디지털 리더 과정: 학교 관리자 대상 2~3차시 과정입니다. 학교 단위 AI·디지털 교육 전환 방향과 리더십, 운영 체계를 논의합니다.",
+    2: "2. 수업혁신을 위한 학부모의 이해: 학부모 대상 1~3차시 과정입니다. AI·디지털 기반 수업 변화와 학교 교육 방향에 대한 공감대를 형성합니다.",
+    3: "3. 학생 AI·디지털 기초 소양 교육: 학생 대상 1~3차시 과정입니다. AI·디지털 도구의 안전하고 책임 있는 활용과 기초 소양을 다룹니다.",
+    4: "4. AI·디지털 문제해결 실무 과정: 교직원 대상 2~3차시 과정입니다. 수업·업무 현장의 문제를 AI·디지털 도구로 해결하는 실습 중심 과정입니다.",
+    5: "5. 교과별 AI·디지털 수업실천 과정: 교원 대상 2~3차시 과정입니다. 교과 성취기준과 수업 목표에 맞춰 AI·디지털 도구 활용 수업을 설계하고 실천 방안을 다룹니다.",
+    6: "6. AI·디지털 수업 자율 주제 과정: 교원 대상 2~3차시 과정입니다. 학교가 희망하는 자율 주제를 바탕으로 맞춤형 수업 설계와 실습을 운영합니다.",
+    7: "7. 우리 학교 돌아보기: 필수 과정입니다. 연수 후 학교 변화와 실행 결과를 돌아보고, 지속 운영 방향을 정리하는 1차시 오프라인 환류 과정입니다."
+  };
+  if (moduleCourseGuide[moduleId]) return moduleCourseGuide[moduleId];
   const module = modules.find((item) => item.id === moduleId);
   if (!module) return "이 과정의 평균 점수와 단계입니다.";
   return `${module.id}. ${module.name}: ${module.description}`;

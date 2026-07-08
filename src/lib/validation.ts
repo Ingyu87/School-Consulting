@@ -27,7 +27,7 @@ export function validateModules(modules: TrainingModule[]): ValidationItem[] {
     requiredSeven.hours === 1;
   const requiredOnline = selected.some((module) => module.required && module.method === "온라인");
 
-  // PDF 기준: 교원 대상 연수는 "각 모듈 단위로" 2차시 이상 구성해야 함 (필수 모듈 0·7은 1차시 고정이라 제외)
+  // 운영 안내 기준: 교원 대상 연수는 모듈 단위로 2차시 이상 구성해야 함 (필수 0·7은 1차시 고정이라 제외)
   const shortTeacherModules = optional.filter(
     (module) => teacherTargets.includes(module.target) && module.hours < 2
   );
@@ -82,15 +82,15 @@ export function validateModules(modules: TrainingModule[]): ValidationItem[] {
     },
     {
       level: "warning",
-      message: "PDF 기준: 모듈0은 최초 연수로, 모듈7은 모든 연수 종료 후 환류 과정으로 마지막에 운영해야 합니다."
+      message: "운영 안내: 0과정은 첫 연수로, 7과정은 모든 연수 종료 후 환류 과정으로 마지막에 운영합니다."
     },
     {
       level: "warning",
-      message: "PDF 기준: 사업 기간 내 식사 1회, 간식 3회 제공. 리더십 과정 진행 시 예산 내 식사 1회 추가 제공 가능합니다."
+      message: "운영 안내: 사업 기간 내 식사 1회, 간식 3회가 제공되며 리더십 과정 진행 시 예산 범위에서 식사 1회가 추가 제공될 수 있습니다."
     },
     {
       level: "warning",
-      message: "PDF 기준: 학부모·학생·온라인 연수는 식사·다과 미제공이며 식사 시간은 차시에 포함하지 않습니다."
+      message: "운영 안내: 학부모·학생·온라인 연수는 식사·다과가 제공되지 않으며, 식사 시간은 연수 차시에 포함하지 않습니다."
     }
   ];
 }

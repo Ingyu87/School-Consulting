@@ -123,7 +123,7 @@ export const defaultModules: TrainingModule[] = [
   },
   {
     id: 5,
-    name: "교과별 전문 과정",
+    name: "교과별 AI·디지털 수업실천 과정",
     required: false,
     selected: true,
     target: "교원",
