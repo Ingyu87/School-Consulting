@@ -1,6 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-
-const DEFAULT_MODEL = "gemini-3.1-flash-lite";
+import { DEFAULT_MODEL, generateContentWithFallback } from "./_lib/gemini";
 
 export default async function handler(request: any, response: any) {
   if (request.method !== "POST") {
@@ -17,14 +16,17 @@ export default async function handler(request: any, response: any) {
     const body = typeof request.body === "string" ? JSON.parse(request.body) : request.body;
     const ai = new GoogleGenAI({ apiKey });
     const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
-    const result = await ai.models.generateContent({
-      model,
-      contents: buildPrompt(body),
-      config: {
-        temperature: 0.25,
-        responseMimeType: "application/json"
-      }
-    });
+    const result = await generateContentWithFallback(
+      ai,
+      {
+        contents: buildPrompt(body),
+        config: {
+          temperature: 0.25,
+          responseMimeType: "application/json"
+        }
+      },
+      model
+    );
 
     const text = result.text ?? "{}";
     return response.status(200).json(parseJsonObject(text));

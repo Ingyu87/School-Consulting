@@ -301,6 +301,11 @@ textarea { width: 100%; min-height: 140px; resize: vertical; border: 1px solid v
 .optionalImport span { max-width: 360px; text-align: right; line-height: 1.45; }
 .inlineStatus { margin: -4px 0 14px; padding: 10px 12px; border: 1px solid #bfdbfe; border-radius: 8px; background: #eff6ff; color: #1e40af; font-size: 14px; font-weight: 700; }
 .appFooter { margin-top: 28px; padding: 18px 0 4px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; text-align: center; }
+.crashScreen { min-height: 100vh; display: grid; place-items: center; background: var(--bg); padding: 24px; }
+.crashCard { max-width: 480px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 28px; text-align: center; box-shadow: 0 10px 30px rgba(15, 23, 42, .08); }
+.crashCard h1 { font-size: 19px; color: var(--navy); margin: 0 0 10px; }
+.crashCard p { color: var(--muted); margin: 0 0 18px; line-height: 1.6; }
+.crashCard pre { margin-top: 18px; text-align: left; font-size: 12px; color: #94a3b8; white-space: pre-wrap; word-break: break-word; }
 [data-help] { position: relative; }
 [data-help]::after {
   content: attr(data-help);

@@ -178,7 +178,7 @@ export function hydrateState(saved: unknown): AppState {
     school.technicalIssues = Array.isArray(raw.school.technicalIssues) ? raw.school.technicalIssues : [];
   }
 
-  const validTabs = ["diagnosis", "school", "interview", "modules", "plan", "export"];
+  const validTabs = ["diagnosis", "school", "interview", "modules", "plan", "guide", "export"];
 
   return {
     activeTab: validTabs.includes(raw.activeTab) ? raw.activeTab : "diagnosis",
@@ -214,6 +214,24 @@ function normalizeNoticeChecks(value: unknown): boolean[] {
     checks[index] = item === true;
   });
   return checks;
+}
+
+/**
+ * CSV를 처음 업로드할 때도, 이미 학교 정보·심층면담·운영계획에 손으로 입력해 둔 내용이 있으면
+ * 덮어쓰기 전에 반드시 확인을 받아야 한다. project가 없다고 해서 입력값이 없다는 뜻은 아니다.
+ * 각 영역을 방금 만든 빈 기본값과 비교해서 조금이라도 다르면 "입력값 있음"으로 본다.
+ */
+export function hasExistingWork(state: AppState): boolean {
+  if (state.project) return true;
+
+  const schoolChanged = JSON.stringify(state.school) !== JSON.stringify(createInitialSchool());
+  const interviewChanged = JSON.stringify(state.interview) !== JSON.stringify(createInitialInterview());
+  const planChanged = JSON.stringify(state.plan) !== JSON.stringify(createInitialPlan());
+  const modulesChanged = state.modules.some(
+    (module) => module.date || module.time || module.place || module.headcount || module.programName || module.schoolVoice
+  );
+
+  return schoolChanged || interviewChanged || planChanged || modulesChanged;
 }
 
 function normalizeIssueGoals(value: unknown) {

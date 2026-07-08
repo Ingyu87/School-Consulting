@@ -1,4 +1,4 @@
-import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   BarChart3,
@@ -17,18 +17,14 @@ import {
   Upload
 } from "lucide-react";
 import { InterviewFormView } from "./components/InterviewFormView";
-import { LottiePlayer } from "./components/LottiePlayer";
 import { PlanFormView } from "./components/PlanFormView";
 import { SchoolInfoForm } from "./components/SchoolInfoForm";
-import aiProcessingLoader from "./assets/ai-processing-loader.json";
-import generationComplete from "./assets/generation-complete.json";
 import { generateAiDraft } from "./lib/ai";
 import { summarizeInterviewTranscript, transcribeInterviewSegment } from "./lib/audio";
-import { createInitialState, hydrateState } from "./lib/defaults";
+import { createInitialState, hasExistingWork, hydrateState } from "./lib/defaults";
 import { buildInsights, stageDescriptions, stageTone } from "./lib/diagnosis";
 import { parseDiagnosisCsv } from "./lib/csv/parseDiagnosisCsv";
 import { parseLectureScheduleCsv } from "./lib/csv/parseLectureScheduleCsv";
-import { downloadInterviewDocx, downloadPlanDocx } from "./lib/docx/exportDocs";
 import { fetchNeisSchoolInfo, mapNeisToSchoolInfo } from "./lib/neis";
 import { clearState, loadState, saveState } from "./lib/storage";
 import { validateModules } from "./lib/validation";
@@ -37,6 +33,10 @@ import type { AiDraftRequest, AiModuleUpdate, AppState, InterviewState, ModuleSc
 
 // Vercel 함수 요청 크기 제한(약 4.5MB) 때문에 긴 면담 녹음은 구간으로 나눠 전사한다.
 const SEGMENT_MS = 180_000;
+
+// lottie-web은 번들이 커서 첫 화면 로딩에 필요하지 않다. 실제로 애니메이션이 뜨는 시점에만 불러온다.
+const AiWaitingLottie = lazy(() => import("./components/AiWaitingLottie"));
+const CompletionLottie = lazy(() => import("./components/CompletionLottie"));
 
 const tabs = [
   ["diagnosis", "진단 분석"],
@@ -61,10 +61,13 @@ export default function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [showHelp, setShowHelp] = useState(true);
   const [showTranscript, setShowTranscript] = useState(false);
+  const [docxGenerating, setDocxGenerating] = useState<"interview" | "plan" | null>(null);
   const [completionNotice, setCompletionNotice] = useState<{ title: string; detail: string } | null>(null);
   const [toastNotice, setToastNotice] = useState<{ tone: "ok" | "error"; message: string } | null>(null);
 
   const stateRef = useRef(state);
+  // 리셋/새 CSV 업로드마다 증가시켜, 그 이전에 보낸 AI 요청의 응답이 늦게 도착해도 무시하도록 한다.
+  const requestEpochRef = useRef(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const segmentTimerRef = useRef<number | null>(null);
@@ -172,15 +175,17 @@ export default function App() {
     setUploadStatus("CSV 분석 중");
     try {
       const project = await parseDiagnosisCsv(file);
-      if (state.project) {
+      if (hasExistingWork(state)) {
+        const currentLabel = state.project?.schoolName ?? "현재";
         const confirmed = window.confirm(
-          `현재 ${state.project.schoolName} 작업(면담·연수 구성·운영계획 입력 포함)을 모두 지우고 ${project.schoolName} 프로젝트를 새로 시작할까요?\n\n기존 작업을 보관하려면 취소 후 다운로드 탭에서 '작업 저장'을 먼저 해주세요.`
+          `${currentLabel} 작업(학교 정보·면담·연수 구성·운영계획 입력 포함)을 모두 지우고 ${project.schoolName} 프로젝트를 새로 시작할까요?\n\n기존 작업을 보관하려면 취소 후 다운로드 탭에서 '작업 저장'을 먼저 해주세요.`
         );
         if (!confirmed) {
           setUploadStatus("새 학교 업로드를 취소했습니다.");
           return;
         }
       }
+      requestEpochRef.current += 1;
       const fresh = createInitialState();
       let neisPatch: Partial<SchoolInfo> = {};
       let neisMessage = "";
@@ -269,6 +274,7 @@ export default function App() {
       return;
     }
 
+    const requestEpoch = requestEpochRef.current;
     setAiStatus("AI 초안 생성 중");
     setAiDraftingTask(task);
     try {
@@ -282,6 +288,11 @@ export default function App() {
         interview: state.interview,
         plan: state.plan
       });
+
+      if (requestEpoch !== requestEpochRef.current) {
+        setAiStatus("이전 학교 세션의 응답이라 반영하지 않았습니다.");
+        return;
+      }
 
       setState((current) => {
         const nextModules = draft.moduleUpdates?.length
@@ -352,6 +363,7 @@ export default function App() {
     const targetModule = state.modules.find((module) => module.id === moduleId);
     if (!targetModule) return;
 
+    const requestEpoch = requestEpochRef.current;
     setModuleDraftingId(moduleId);
     setAiStatus(`${targetModule.id}. ${targetModule.name} AI 초안 생성 중`);
     try {
@@ -365,6 +377,12 @@ export default function App() {
         interview: state.interview,
         plan: state.plan
       });
+
+      if (requestEpoch !== requestEpochRef.current) {
+        setAiStatus("이전 학교 세션의 응답이라 반영하지 않았습니다.");
+        return;
+      }
+
       const update = draft.moduleUpdates?.find((item) => item.id === moduleId);
       if (!update) {
         setAiStatus("AI 초안을 받았지만 적용할 과정 내용이 없습니다.");
@@ -405,7 +423,8 @@ export default function App() {
   function startSegmentRecorder() {
     const stream = streamRef.current;
     if (!stream) return;
-    const recorder = new MediaRecorder(stream);
+    // 오디오 비트레이트를 낮게 고정해 3분 세그먼트가 Vercel 함수 요청 본문 제한(약 4.5MB)을 넘지 않도록 한다.
+    const recorder = new MediaRecorder(stream, { audioBitsPerSecond: 32000 });
     const chunks: Blob[] = [];
     recorder.ondataavailable = (event) => {
       if (event.data.size > 0) chunks.push(event.data);
@@ -437,11 +456,14 @@ export default function App() {
         setRecordingStatus(`구간 ${index + 1} 전사 중${isFinal ? " (마지막 구간)" : ""}`);
         try {
           const transcript = await transcribeInterviewSegment(blob, index);
+          if (cancelledRef.current) return;
           if (transcript.trim()) appendTranscript(transcript.trim());
         } catch (error) {
+          if (cancelledRef.current) return;
           appendTranscript(`(구간 ${index + 1} 전사 실패: ${error instanceof Error ? error.message : "알 수 없는 오류"})`);
         }
       }
+      if (cancelledRef.current) return;
       if (isFinal) {
         await finishRecordingAnalysis();
       } else if (!finalizingRef.current && !cancelledRef.current) {
@@ -466,6 +488,7 @@ export default function App() {
     setRecordingStatus("전사 완료 · 면담 내용 종합 분석 중");
     try {
       const summary = await summarizeInterviewTranscript(transcript, stateRef.current);
+      if (cancelledRef.current) return;
       setState((current) => ({
         ...current,
         interview: {
@@ -484,6 +507,7 @@ export default function App() {
       }));
       setRecordingStatus("전사 및 AI 분석 완료 · 심층면담 항목에 반영했습니다.");
     } catch (error) {
+      if (cancelledRef.current) return;
       setRecordingStatus(error instanceof Error ? error.message : "면담 종합 분석 실패");
     }
   }
@@ -535,13 +559,31 @@ export default function App() {
   }
 
   async function handleDownloadInterviewDocx() {
-    await downloadInterviewDocx(state);
-    showCompletion("생성 완료", "심층면담지 DOCX를 생성했습니다.");
+    if (docxGenerating) return;
+    setDocxGenerating("interview");
+    try {
+      const { downloadInterviewDocx } = await import("./lib/docx/exportDocs");
+      await downloadInterviewDocx(state);
+      showCompletion("생성 완료", "심층면담지 DOCX를 생성했습니다.");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "심층면담지 DOCX 생성에 실패했습니다.", "error");
+    } finally {
+      setDocxGenerating(null);
+    }
   }
 
   async function handleDownloadPlanDocx() {
-    await downloadPlanDocx(state);
-    showCompletion("생성 완료", "운영계획서 DOCX를 생성했습니다.");
+    if (docxGenerating) return;
+    setDocxGenerating("plan");
+    try {
+      const { downloadPlanDocx } = await import("./lib/docx/exportDocs");
+      await downloadPlanDocx(state);
+      showCompletion("생성 완료", "운영계획서 DOCX를 생성했습니다.");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "운영계획서 DOCX 생성에 실패했습니다.", "error");
+    } finally {
+      setDocxGenerating(null);
+    }
   }
 
   function downloadScheduleCsv() {
@@ -592,6 +634,7 @@ export default function App() {
   async function resetWorkspace() {
     const confirmed = window.confirm("현재 입력한 내용과 자동저장된 작업을 모두 지우고 처음부터 시작할까요?");
     if (!confirmed) return;
+    requestEpochRef.current += 1;
     cancelRecording();
     await clearState();
     setState(createInitialState());
@@ -676,7 +719,9 @@ export default function App() {
         <div className="feedbackLayer" aria-live="polite">
           {completionNotice && !isAiBusy && (
             <div className="completionToast">
-              <LottiePlayer animationData={generationComplete} className="completionLottie" label="생성 완료" loop={false} />
+              <Suspense fallback={<div className="completionLottie" />}>
+                <CompletionLottie className="completionLottie" />
+              </Suspense>
               <div>
                 <strong>{completionNotice.title}</strong>
                 <span>{completionNotice.detail}</span>
@@ -716,7 +761,9 @@ export default function App() {
         {state.activeTab === "guide" && recordingStatus && <div className="notice recordingNotice"><Mic size={17} />{recordingStatus}</div>}
         {isAiBusy && state.activeTab !== "guide" && (
           <div className="aiWaitingPanel" role="status" aria-live="polite">
-            <LottiePlayer animationData={aiProcessingLoader} className="aiWaitingLottie" label="AI 분석 대기" />
+            <Suspense fallback={<div className="aiWaitingLottie" />}>
+              <AiWaitingLottie className="aiWaitingLottie" />
+            </Suspense>
             <div>
               <p className="eyebrow">{moduleDraftingId !== null ? "과정별 AI 초안" : "AI 분석 대기"}</p>
               <h2>{moduleDraftingId !== null ? `${moduleDraftingId}번 과정 초안을 작성하고 있습니다.` : "AI가 자료를 정리하고 있습니다."}</h2>
@@ -1081,13 +1128,19 @@ export default function App() {
               <FileText size={34} />
               <h2>심층면담지 DOCX</h2>
               <p>필수 안내 확인, 운영 개요, 학교 일반사항·인프라, 참여 목표, 친화도 진단, 모듈 구성, 고려사항, 핵심 요약을 PDF 양식 순서로 생성합니다.</p>
-              <button className="button primary" onClick={handleDownloadInterviewDocx}><FileDown size={18} />다운로드</button>
+              <button className="button primary" onClick={handleDownloadInterviewDocx} disabled={docxGenerating !== null}>
+                {docxGenerating === "interview" ? <span className="aiSpinner" aria-hidden="true" /> : <FileDown size={18} />}
+                {docxGenerating === "interview" ? "생성 중" : "다운로드"}
+              </button>
             </article>
             <article className="panel downloadCard">
               <FileText size={34} />
               <h2>운영계획서 DOCX</h2>
               <p>현황 분석, 강점·도전과제, 1·2차 면담 요약, 이슈→목표, 과정별 세부 프로그램·기대효과를 PDF 양식 순서로 생성합니다.</p>
-              <button className="button primary" onClick={handleDownloadPlanDocx}><FileDown size={18} />다운로드</button>
+              <button className="button primary" onClick={handleDownloadPlanDocx} disabled={docxGenerating !== null}>
+                {docxGenerating === "plan" ? <span className="aiSpinner" aria-hidden="true" /> : <FileDown size={18} />}
+                {docxGenerating === "plan" ? "생성 중" : "다운로드"}
+              </button>
             </article>
             <article className="panel workFileCard wide">
               <div>

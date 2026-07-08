@@ -1,6 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-
-const DEFAULT_MODEL = "gemini-3.1-flash-lite";
+import { DEFAULT_MODEL, generateContentWithFallback } from "./_lib/gemini";
 
 /**
  * 심층면담 녹음 처리 API.
@@ -24,33 +23,39 @@ export default async function handler(request: any, response: any) {
 
     if (mode === "transcribe") {
       if (!body?.audioBase64) return response.status(400).send("audioBase64가 없습니다.");
-      const result = await ai.models.generateContent({
-        model,
-        contents: [
-          {
-            role: "user",
-            parts: [
-              { text: transcribePrompt(body.segmentIndex) },
-              {
-                inlineData: {
-                  mimeType: body.mimeType || "audio/webm",
-                  data: body.audioBase64
+      const result = await generateContentWithFallback(
+        ai,
+        {
+          contents: [
+            {
+              role: "user",
+              parts: [
+                { text: transcribePrompt(body.segmentIndex) },
+                {
+                  inlineData: {
+                    mimeType: body.mimeType || "audio/webm",
+                    data: body.audioBase64
+                  }
                 }
-              }
-            ]
-          }
-        ],
-        config: { temperature: 0.1, responseMimeType: "application/json" }
-      });
+              ]
+            }
+          ],
+          config: { temperature: 0.1, responseMimeType: "application/json" }
+        },
+        model
+      );
       return response.status(200).json(parseJson(result.text ?? "{}"));
     }
 
     if (!body?.transcript) return response.status(400).send("transcript가 없습니다.");
-    const result = await ai.models.generateContent({
-      model,
-      contents: summarizePrompt(String(body.transcript), body.context ?? {}),
-      config: { temperature: 0.25, responseMimeType: "application/json" }
-    });
+    const result = await generateContentWithFallback(
+      ai,
+      {
+        contents: summarizePrompt(String(body.transcript), body.context ?? {}),
+        config: { temperature: 0.25, responseMimeType: "application/json" }
+      },
+      model
+    );
     return response.status(200).json(parseJson(result.text ?? "{}"));
   } catch (error) {
     const message = error instanceof Error ? error.message : "심층면담 음성 분석 중 오류가 발생했습니다.";
@@ -103,6 +108,47 @@ ${transcript}`;
 }
 
 function parseJson(text: string) {
-  const trimmed = text.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "");
-  return JSON.parse(trimmed);
+  const trimmed = text.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const jsonText = extractFirstJsonObject(trimmed);
+    if (!jsonText) throw new Error("AI 응답을 JSON으로 해석하지 못했습니다. 다시 시도해주세요.");
+    return JSON.parse(jsonText);
+  }
+}
+
+function extractFirstJsonObject(text: string) {
+  const start = text.indexOf("{");
+  if (start < 0) return "";
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = start; index < text.length; index += 1) {
+    const char = text[index];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === "\"") {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === "\"") {
+      inString = true;
+    } else if (char === "{") {
+      depth += 1;
+    } else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) return text.slice(start, index + 1);
+    }
+  }
+
+  return "";
 }
