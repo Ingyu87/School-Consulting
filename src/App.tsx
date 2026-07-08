@@ -960,6 +960,7 @@ export default function App() {
             </article>
           </section>
         )}
+        <footer className="appFooter">© 서울가동초 백인규</footer>
       </main>
     </div>
   );
