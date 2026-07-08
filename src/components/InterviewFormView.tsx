@@ -1,4 +1,3 @@
-import { Sparkles } from "lucide-react";
 import { capabilityOptions, goalOptions, reactionOptions } from "../data/officialOptions";
 import type { InterviewState, ParticipantTeacher } from "../types";
 import { CheckGroup, FormArea, FormInput, RadioGroup } from "./fields";
@@ -6,11 +5,9 @@ import { CheckGroup, FormArea, FormInput, RadioGroup } from "./fields";
 type Props = {
   interview: InterviewState;
   onChange: (patch: Partial<InterviewState>) => void;
-  onAiDraft?: (section: "interview-core") => void;
-  isAiBusy?: boolean;
 };
 
-export function InterviewFormView({ interview, onChange, onAiDraft, isAiBusy }: Props) {
+export function InterviewFormView({ interview, onChange }: Props) {
   function updateTeacher(index: number, patch: Partial<ParticipantTeacher>) {
     onChange({
       teachers: interview.teachers.map((teacher, i) => (i === index ? { ...teacher, ...patch } : teacher))
@@ -86,12 +83,6 @@ export function InterviewFormView({ interview, onChange, onAiDraft, isAiBusy }: 
       <div className="panel formSection">
         <div className="sectionTitleRow">
           <h3>Ⅵ. 심층면담 결과 핵심 요약</h3>
-          {onAiDraft && (
-            <button className="button primary compact" onClick={() => onAiDraft("interview-core")} disabled={isAiBusy}>
-              {isAiBusy ? <span className="aiSpinner" aria-hidden="true" /> : <Sparkles size={15} />}
-              AI 결과 요약 작성
-            </button>
-          )}
         </div>
         <p className="formHint">녹음 전사, 입력된 면담 내용, 진단 결과, 연수 구성을 함께 참고해 참여 목표와 면담 핵심 결과 초안을 작성합니다.</p>
         <FormArea label="면담 대상 학교의 연수 참여 목표" value={interview.participationGoal} onChange={(participationGoal) => onChange({ participationGoal })} compact />
