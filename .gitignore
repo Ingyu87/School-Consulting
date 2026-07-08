@@ -12,3 +12,4 @@ Thumbs.db
 # Local generated outputs
 outputs/
 downloads/
+.vercel
