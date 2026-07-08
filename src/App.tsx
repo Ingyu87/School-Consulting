@@ -16,10 +16,8 @@ import {
   Upload
 } from "lucide-react";
 import { InterviewFormView } from "./components/InterviewFormView";
-import { LottiePlayer } from "./components/LottiePlayer";
 import { PlanFormView } from "./components/PlanFormView";
 import { SchoolInfoForm } from "./components/SchoolInfoForm";
-import aiAnalysisLoader from "./assets/ai-analysis-loader.json";
 import { generateAiDraft } from "./lib/ai";
 import { summarizeInterviewTranscript, transcribeInterviewSegment } from "./lib/audio";
 import { createInitialState, hydrateState } from "./lib/defaults";
@@ -544,12 +542,12 @@ export default function App() {
         <div className="sidebarFooter">
           <div className="sidebarFileTools">
             <strong>작업 파일 관리</strong>
-            <label className="resetButton" {...help("저장해 둔 작업 JSON을 불러와 이어서 작성합니다.")}>
+            <label className="resetButton" {...help("저장해 둔 작업 JSON을 불러와 같은 입력 내용으로 이어서 작성합니다. 원본 CSV/PDF 파일 자체는 포함되지 않습니다.")}>
               <FolderOpen size={16} />
               작업 불러오기
               <input type="file" accept=".json" onChange={(event) => event.target.files?.[0] && restoreBackup(event.target.files[0])} />
             </label>
-            <button className="resetButton" onClick={downloadBackup} {...help("현재 입력 상태를 JSON 파일로 저장합니다.")}>
+            <button className="resetButton" onClick={downloadBackup} {...help("현재 입력 내용과 AI 초안, 연수 구성, 운영계획 입력값을 JSON 파일로 저장합니다. 원본 CSV/PDF 파일 자체는 포함되지 않습니다.")}>
               <Download size={16} />
               작업 저장
             </button>
@@ -592,7 +590,7 @@ export default function App() {
         {state.activeTab === "guide" && recordingStatus && <div className="notice recordingNotice"><Mic size={17} />{recordingStatus}</div>}
         {isAiBusy && state.activeTab !== "guide" && (
           <div className="aiBusyBanner">
-            <LottiePlayer animationData={aiAnalysisLoader} className="aiBusyAnimation small" label="AI 분석중" />
+            <span className="aiSpinner large" aria-hidden="true" />
             <span>{moduleDraftingId !== null ? `${moduleDraftingId}번 과정 AI 초안 작성중` : "AI 분석중"}</span>
           </div>
         )}
@@ -610,11 +608,11 @@ export default function App() {
                   <input type="file" accept=".csv" onChange={(event) => event.target.files?.[0] && handleCsv(event.target.files[0])} />
                 </label>
                 <button className="button primary inlineAction" onClick={() => runAiDraft("diagnosis")} disabled={aiDraftingTask === "diagnosis"}>
-                  {aiDraftingTask === "diagnosis" ? <LottiePlayer animationData={aiAnalysisLoader} className="buttonLottie" label="AI 분석중" /> : <Sparkles size={17} />}
+                  {aiDraftingTask === "diagnosis" ? <span className="aiSpinner" aria-hidden="true" /> : <Sparkles size={17} />}
                   {aiDraftingTask === "diagnosis" ? "AI 분석중" : "AI로 심층 분석"}
                 </button>
               </div>
-              {aiDraftingTask === "diagnosis" ? <LottiePlayer animationData={aiAnalysisLoader} className="heroLottie" label="AI 분석중" /> : <BarChart3 className="heroIcon" />}
+              <BarChart3 className="heroIcon" />
             </article>
             <article className="panel wide" {...help("과정별 평균 점수를 막대로 비교합니다. 각 행에 마우스를 올리면 과정 설명을 볼 수 있습니다.")}>
               <h2>과정별 평균 점수</h2>
@@ -778,7 +776,7 @@ export default function App() {
                     {isRecording ? "녹음 정지" : "녹음 시작"}
                   </button>
                   <button className="button primary" onClick={() => runAiDraft("interview-plan")} disabled={aiDraftingTask === "interview-plan"}>
-                    {aiDraftingTask === "interview-plan" ? <LottiePlayer animationData={aiAnalysisLoader} className="buttonLottie" label="AI 분석중" /> : <Sparkles size={17} />}
+                    {aiDraftingTask === "interview-plan" ? <span className="aiSpinner" aria-hidden="true" /> : <Sparkles size={17} />}
                     {aiDraftingTask === "interview-plan" ? "AI 분석중" : "AI 초안"}
                   </button>
                 </div>
@@ -810,7 +808,7 @@ export default function App() {
                   <p>사람이 정한 차시, 방식, 일정, 시간, 장소, 희망 주제는 유지하고, 선택된 과정의 프로그램명·우리학교 목소리·세부 프로그램 초안·기대효과만 작성합니다.</p>
                 </div>
                 <button className="button primary" onClick={() => runAiDraft("module-content")} disabled={aiDraftingTask === "module-content"}>
-                  {aiDraftingTask === "module-content" ? <LottiePlayer animationData={aiAnalysisLoader} className="buttonLottie" label="AI 분석중" /> : <Sparkles size={17} />}
+                  {aiDraftingTask === "module-content" ? <span className="aiSpinner" aria-hidden="true" /> : <Sparkles size={17} />}
                   {aiDraftingTask === "module-content" ? "AI 작성중" : "AI 초안 작성"}
                 </button>
               </div>
@@ -827,7 +825,7 @@ export default function App() {
                     </label>
                   </div>
                   <button className="button primary compact moduleDraftButton" onClick={() => runModuleDraft(module.id)} disabled={moduleDraftingId === module.id}>
-                    {moduleDraftingId === module.id ? <LottiePlayer animationData={aiAnalysisLoader} className="buttonLottie" label="AI 분석중" /> : <Sparkles size={15} />}
+                    {moduleDraftingId === module.id ? <span className="aiSpinner" aria-hidden="true" /> : <Sparkles size={15} />}
                     {moduleDraftingId === module.id ? "작성 중" : "AI 초안 작성"}
                   </button>
                   <p className="moduleDescription">{module.description}</p>
@@ -891,7 +889,7 @@ export default function App() {
                   <p className="formHint">운영계획서.pdf 양식 순서(Ⅰ 현황 → Ⅱ 강점·과제 → Ⅲ 면담 요약 → Ⅳ 이슈→목표 → Ⅴ 로드맵)대로 출력됩니다. Ⅰ장 현황·진단 분석은 진단 분석 탭에서 편집합니다.</p>
                 </div>
                 <button className="button primary" onClick={() => runAiDraft("interview-plan", "plan")} disabled={aiDraftingTask === "interview-plan"}>
-                  {aiDraftingTask === "interview-plan" ? <LottiePlayer animationData={aiAnalysisLoader} className="buttonLottie" label="AI 분석중" /> : <Sparkles size={17} />}
+                  {aiDraftingTask === "interview-plan" ? <span className="aiSpinner" aria-hidden="true" /> : <Sparkles size={17} />}
                   {aiDraftingTask === "interview-plan" ? "AI 분석중" : "AI 초안"}
                 </button>
               </div>
@@ -961,7 +959,7 @@ export default function App() {
               <div>
                 <p className="eyebrow">선택 사항</p>
                 <h2>작업 파일 관리</h2>
-                <p>현재 입력 상태를 파일로 보관하거나, 다른 컴퓨터·다른 학교 작업으로 이어서 할 때 사용합니다.</p>
+                <p>현재 입력 내용과 AI 초안, 연수 구성, 운영계획 입력값을 JSON으로 보관합니다. 같은 웹앱에서 불러오면 이어서 작성할 수 있으며 원본 CSV/PDF 파일 자체는 포함되지 않습니다.</p>
               </div>
               <div className="workFileActions">
                 <label className="button ghost">
@@ -977,7 +975,7 @@ export default function App() {
             </article>
           </section>
         )}
-        <footer className="appFooter">© 서울가동초 백인규</footer>
+        <footer className="appFooter">Copyright © 2026 서울가동초등학교 백인규. All rights reserved.</footer>
       </main>
     </div>
   );
