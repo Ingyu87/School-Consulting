@@ -32,6 +32,7 @@ import { downloadInterviewDocx, downloadPlanDocx } from "./lib/docx/exportDocs";
 import { fetchNeisSchoolInfo, mapNeisToSchoolInfo } from "./lib/neis";
 import { clearState, loadState, saveState } from "./lib/storage";
 import { validateModules } from "./lib/validation";
+import { noticeItems } from "./data/officialOptions";
 import type { AiDraftRequest, AiModuleUpdate, AppState, InterviewState, ModuleScore, PlanState, SchoolInfo, TrainingModule } from "./types";
 
 // Vercel 함수 요청 크기 제한(약 4.5MB) 때문에 긴 면담 녹음은 구간으로 나눠 전사한다.
@@ -147,6 +148,16 @@ export default function App() {
 
   function patchInterview(patch: Partial<InterviewState>) {
     setState((current) => ({ ...current, interview: { ...current.interview, ...patch } }));
+  }
+
+  function toggleNotice(index: number) {
+    setState((current) => ({
+      ...current,
+      interview: {
+        ...current.interview,
+        noticeChecks: current.interview.noticeChecks.map((checked, i) => (i === index ? !checked : checked))
+      }
+    }));
   }
 
   function patchPlan(patch: Partial<PlanState>) {
@@ -1018,6 +1029,21 @@ export default function App() {
               {validations.map((item) => (
                 <div className={`rule ${item.level}`} key={item.message}>{item.message}</div>
               ))}
+            </article>
+            <article className="panel">
+              <h2>심층면담 필수 안내</h2>
+              <p className="formHint">학교 연수담당자에게 안내한 항목을 체크합니다. 체크 결과는 심층면담지 DOCX에 반영됩니다.</p>
+              <div className="noticeList">
+                {noticeItems.map((item, index) => (
+                  <label className={`noticeItem ${state.interview.noticeChecks[index] ? "checked" : ""}`} key={item.title}>
+                    <input type="checkbox" checked={state.interview.noticeChecks[index] ?? false} onChange={() => toggleNotice(index)} />
+                    <div>
+                      <strong>{item.title}</strong>
+                      <p>{item.detail}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
             </article>
             <article className="panel">
               <h2>학교 안내용 운영 안내</h2>

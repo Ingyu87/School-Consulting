@@ -122,19 +122,7 @@ export async function downloadInterviewDocx(state: AppState) {
             [18, 46, 18, 18]
           ),
           subLabel("② 맞춤형 연수 기획"),
-          table(
-            [["모듈 구성", "차시 구성", "연수 일정", "연수 방법", "중점 도구", "운영 주제", "비고"]],
-            selected.map((module) => [
-              `과정 ${module.id}`,
-              String(module.hours),
-              [module.date, module.time].filter(Boolean).join(" "),
-              module.method === "온라인" ? "온라인" : "강의/토론·실습(오프라인)",
-              module.mainTool,
-              module.topic,
-              module.note
-            ]),
-            [12, 10, 18, 16, 14, 20, 10]
-          ),
+          ...interviewModulePlanBlocks(selected),
           subLabel("③ 기타 고려사항"),
           table(
             [["구분", "세부내용"]],
@@ -280,38 +268,10 @@ export async function downloadPlanDocx(state: AppState) {
           kvTable([["우리학교 혁신 로드맵 방향", plan.roadmapDirection]], 28),
 
           section("Ⅴ-1. 우리학교 디지털 혁신 로드맵 – 과정별 세부 프로그램 계획"),
-          table(
-            [["모듈", "진단 점수", "우리학교 목소리", "프로그램명", "차시", "주요 내용"]],
-            modules.map((module) => {
-              const score = state.project?.moduleScores.find((item) => item.moduleId === module.id);
-              return [
-                `모듈 ${module.id}`,
-                score ? score.score.toFixed(2) : "",
-                module.selected ? module.schoolVoice : "",
-                module.selected ? module.programName : "미구성",
-                module.selected ? String(module.hours) : "-",
-                module.selected ? module.editableProgram || module.defaultProgram : ""
-              ];
-            }),
-            [8, 9, 22, 18, 7, 36]
-          ),
+          ...programPlanBlocks(modules, state.project?.moduleScores ?? []),
 
           section("Ⅴ-2. 우리학교 디지털 혁신 로드맵 – 우리학교 맞춤형 프로그램 계획(안)"),
-          table(
-            [["모듈", "프로그램명", "일정", "장소", "방법", "인원", "차시", "회차", "기대효과"]],
-            selected.map((module) => [
-              `모듈 ${module.id}`,
-              module.programName || module.name,
-              module.date,
-              module.place || schoolName,
-              module.method === "온라인" ? "온라인" : "강의토론/실습",
-              module.headcount,
-              String(module.hours),
-              module.sessionRound,
-              module.expectedEffect
-            ]),
-            [8, 18, 10, 10, 10, 7, 6, 6, 25]
-          ),
+          ...customProgramBlocks(selected, schoolName),
 
           section("과정별 기대효과 및 종합 의견"),
           ...bodyParagraphs(plan.roadmapNotes || " "),
@@ -356,6 +316,62 @@ function infrastructureBlocks(state: AppState) {
     blocks.push(...bullets(question.responses.length > 0 ? question.responses : [" "]));
   }
   return blocks;
+}
+
+function interviewModulePlanBlocks(modules: TrainingModule[]) {
+  if (modules.length === 0) return [note("선택된 연수 과정이 없습니다.")];
+  return modules.flatMap((module) => [
+    subLabel(`과정 ${module.id}. ${module.name}`),
+    kvTable(
+      [
+        ["차시 구성", `${module.hours}차시`],
+        ["연수 일정", [module.date, module.time].filter(Boolean).join(" ")],
+        ["연수 방법", module.method === "온라인" ? "온라인" : "강의/토론·실습(오프라인)"],
+        ["중점 도구", module.mainTool],
+        ["운영 주제", module.topic],
+        ["비고", module.note]
+      ],
+      22
+    )
+  ]);
+}
+
+function programPlanBlocks(modules: TrainingModule[], scores: { moduleId: number; score: number }[]) {
+  return modules.flatMap((module) => {
+    const score = scores.find((item) => item.moduleId === module.id);
+    return [
+      subLabel(`모듈 ${module.id}. ${module.name}`),
+      kvTable(
+        [
+          ["진단 점수", score ? score.score.toFixed(2) : ""],
+          ["구성 상태", module.required ? "필수 과정" : module.selected ? "선택 구성" : "미구성"],
+          ["우리학교 목소리", module.selected ? module.schoolVoice : ""],
+          ["프로그램명", module.selected ? module.programName || module.name : "미구성"],
+          ["차시", module.selected ? `${module.hours}차시` : "-"],
+          ["주요 내용", module.selected ? module.editableProgram || module.defaultProgram : ""]
+        ],
+        22
+      )
+    ];
+  });
+}
+
+function customProgramBlocks(modules: TrainingModule[], schoolName: string) {
+  if (modules.length === 0) return [note("선택된 맞춤형 프로그램이 없습니다.")];
+  return modules.flatMap((module) => [
+    subLabel(`모듈 ${module.id}. ${module.programName || module.name}`),
+    kvTable(
+      [
+        ["일정", module.date],
+        ["장소", module.place || schoolName],
+        ["방법", module.method === "온라인" ? "온라인" : "강의토론/실습"],
+        ["인원", module.headcount],
+        ["차시·회차", [module.hours ? `${module.hours}차시` : "", module.sessionRound && `${module.sessionRound}회차`].filter(Boolean).join(" / ")],
+        ["기대효과", module.expectedEffect]
+      ],
+      22
+    )
+  ]);
 }
 
 function checkboxLine(options: readonly string[], value: string) {

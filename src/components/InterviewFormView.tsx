@@ -1,5 +1,5 @@
 import { Sparkles } from "lucide-react";
-import { capabilityOptions, goalOptions, noticeItems, reactionOptions } from "../data/officialOptions";
+import { capabilityOptions, goalOptions, reactionOptions } from "../data/officialOptions";
 import type { InterviewState, ParticipantTeacher } from "../types";
 import { CheckGroup, FormArea, FormInput, RadioGroup } from "./fields";
 
@@ -17,30 +17,8 @@ export function InterviewFormView({ interview, onChange, onAiDraft, isAiBusy }: 
     });
   }
 
-  function toggleNotice(index: number) {
-    onChange({
-      noticeChecks: interview.noticeChecks.map((checked, i) => (i === index ? !checked : checked))
-    });
-  }
-
   return (
     <>
-      <div className="panel formSection">
-        <h3>[필수 안내] 학교 연수담당자 사전 안내</h3>
-        <p className="formHint">현장에서 안내를 마친 항목을 체크하세요. 체크 상태는 심층면담지에 안내 완료로 출력됩니다.</p>
-        <div className="noticeList">
-          {noticeItems.map((item, index) => (
-            <label className={`noticeItem ${interview.noticeChecks[index] ? "checked" : ""}`} key={item.title}>
-              <input type="checkbox" checked={interview.noticeChecks[index] ?? false} onChange={() => toggleNotice(index)} />
-              <div>
-                <strong>{item.title}</strong>
-                <p>{item.detail}</p>
-              </div>
-            </label>
-          ))}
-        </div>
-      </div>
-
       <div className="panel formSection">
         <h3>Ⅰ. 심층면담 운영 개요</h3>
         <FormInput label="심층면담 일시" value={interview.dateTime} onChange={(dateTime) => onChange({ dateTime })} placeholder="예: 2026년 6월 26일(금) 14:30 ~ 17:30" />
