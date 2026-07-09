@@ -22,7 +22,7 @@ export async function parseDiagnosisCsv(file: File): Promise<ParsedDiagnosisProj
   const openEndedQuestions = parseOpenEnded(rows);
   const parseWarnings: string[] = [];
 
-  if (!rows.some((row) => row.join(" ").includes("STEP1. 사전 자가진단 종합 분석표"))) {
+  if (moduleScores.length === 0 && !rows.some((row) => row.join(" ").includes("STEP1. 사전 자가진단 종합 분석표"))) {
     parseWarnings.push("STEP1 마커를 찾지 못했습니다. 과정별 점수 추출이 제한될 수 있습니다.");
   }
   if (moduleScores.length === 0) {
@@ -70,6 +70,9 @@ function normalizeCell(value: unknown) {
 
 function detectSchoolName(fileName: string, rows: string[][]) {
   const cleanName = fileName.replace(/\.[^.]+$/, "");
+  const directSchoolName = cleanName.match(/서울[가-힣A-Za-z0-9]+초/);
+  if (directSchoolName?.[0]) return directSchoolName[0];
+
   const fileMatch = cleanName.match(/(?:\]\s*)?([^_\-]+?)_사전\s*자가진단\s*분석/);
   if (fileMatch?.[1]) return tidySchoolName(fileMatch[1]);
 
@@ -110,7 +113,48 @@ function parseModuleScores(rows: string[][]) {
       stage: scoreStage(score)
     });
   }
+  const standardScores = dedupeByModule(scores);
+  return standardScores.length > 0 ? standardScores : parseSectionModuleScores(rows);
+}
+
+function parseSectionModuleScores(rows: string[][]) {
+  const scores: ModuleScore[] = [];
+  for (const row of rows) {
+    for (let sectionIndex = 0; sectionIndex < row.length; sectionIndex += 1) {
+      if (!/\(SECTION\s+\d+\)/i.test(row[sectionIndex])) continue;
+
+      const sectionMatch = row[sectionIndex].match(/\(SECTION\s+(\d+)\)/i);
+      const sectionNumber = Number(sectionMatch?.[1]);
+      const moduleId = sectionNumber - 2;
+      if (!Number.isInteger(moduleId) || moduleId < 0 || moduleId > 7) continue;
+      if (scores.some((score) => score.moduleId === moduleId)) continue;
+
+      const score = findScoreAfter(row, sectionIndex);
+      if (score == null) continue;
+
+      const standardName = defaultModules.find((module) => module.id === moduleId)?.name ?? `모듈${moduleId}`;
+      const question = row
+        .slice(0, sectionIndex)
+        .find((cell) => cell.length > 18 && (cell.includes("?") || cell.includes("까") || cell.includes("나요")));
+
+      scores.push({
+        moduleId,
+        moduleName: standardName,
+        question: question ?? `${standardName} 영역의 대표 문항`,
+        score,
+        stage: scoreStage(score)
+      });
+    }
+  }
   return dedupeByModule(scores);
+}
+
+function findScoreAfter(row: string[], startIndex: number) {
+  for (const cell of row.slice(startIndex + 1, startIndex + 4)) {
+    const value = Number(cell);
+    if (Number.isFinite(value) && value >= 0 && value <= 5) return value;
+  }
+  return null;
 }
 
 function findTrailingScore(row: string[]) {
