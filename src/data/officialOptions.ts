@@ -48,7 +48,7 @@ export const schoolCharacterOptions = ["일반", "특목", "자율", "중점"] a
 
 export const leadingSchoolOptions = ["유", "무"] as const;
 
-export const teacherDeviceOptions = ["태블릿 PC", "노트북/데스크탑", "Mac/IOS", "웨일북"] as const;
+export const teacherDeviceOptions = ["태블릿 PC", "노트북/데스크탑", "Mac/IOS", "웨일북", "크롬북"] as const;
 
 export const studentDeviceRatioOptions = ["100% 이상", "80% 이상", "60% 이상", "40% 이상", "40% 미만"] as const;
 

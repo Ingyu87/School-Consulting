@@ -86,9 +86,9 @@ function detectSchoolName(fileName: string, rows: string[][]) {
 function tidySchoolName(value: string) {
   return value
     .replace(/^\['?\d+_서울\]?/, "")
-    .replace(/등학교.*$/, "초")
+    .replace(/[<>]/g, "")
+    .replace(/등학교.*$/, "")
     .replace(/\s+/g, "")
-    .replace(/서울고일초초$/, "서울고일초")
     .trim();
 }
 
@@ -117,44 +117,52 @@ function parseModuleScores(rows: string[][]) {
   return standardScores.length > 0 ? standardScores : parseSectionModuleScores(rows);
 }
 
+/**
+ * 문항 단위(예: 서울가동초 자가점검표) CSV용 대체 파서.
+ * 각 문항 행의 첫 칸에는 그 문항이 속한 섹션 라벨이 새 섹션의 첫 행에만 한 번 적혀 있고
+ * ("모듈명\n (SECTION N)"), 이후 같은 섹션에 속한 문항 행들은 첫 칸이 비어 있다.
+ * 행 뒤쪽에는 "관련 있는 다른 섹션 이름 + 그 섹션 평균"을 참고용으로 끼워 넣은 셀도 있는데,
+ * 이 참고 셀도 (SECTION N) 패턴과 일치하므로 행 전체를 훑으면 엉뚱한 섹션으로 오귀속된다.
+ * 그래서 반드시 첫 칸만 섹션 경계로 인정하고, 문항 자체 점수(행의 마지막 0~5 숫자)를
+ * 섹션별로 모아 평균을 낸다.
+ */
 function parseSectionModuleScores(rows: string[][]) {
-  const scores: ModuleScore[] = [];
+  const groups = new Map<number, { scores: number[]; firstQuestion: string }>();
+  let currentModuleId: number | null = null;
+
   for (const row of rows) {
-    for (let sectionIndex = 0; sectionIndex < row.length; sectionIndex += 1) {
-      if (!/\(SECTION\s+\d+\)/i.test(row[sectionIndex])) continue;
+    const sectionMatch = (row[0] ?? "").match(/\(SECTION\s+(\d+)\)/i);
+    if (sectionMatch) {
+      const moduleId = Number(sectionMatch[1]) - 2;
+      currentModuleId = Number.isInteger(moduleId) && moduleId >= 0 && moduleId <= 7 ? moduleId : null;
+    }
+    if (currentModuleId == null) continue;
 
-      const sectionMatch = row[sectionIndex].match(/\(SECTION\s+(\d+)\)/i);
-      const sectionNumber = Number(sectionMatch?.[1]);
-      const moduleId = sectionNumber - 2;
-      if (!Number.isInteger(moduleId) || moduleId < 0 || moduleId > 7) continue;
-      if (scores.some((score) => score.moduleId === moduleId)) continue;
+    const question = row.find((cell) => /귀하|귀교/.test(cell) && cell.includes("?"));
+    const score = findTrailingScore(row);
+    if (!question || score == null) continue;
 
-      const score = findScoreAfter(row, sectionIndex);
-      if (score == null) continue;
-
-      const standardName = defaultModules.find((module) => module.id === moduleId)?.name ?? `모듈${moduleId}`;
-      const question = row
-        .slice(0, sectionIndex)
-        .find((cell) => cell.length > 18 && (cell.includes("?") || cell.includes("까") || cell.includes("나요")));
-
-      scores.push({
-        moduleId,
-        moduleName: standardName,
-        question: question ?? `${standardName} 영역의 대표 문항`,
-        score,
-        stage: scoreStage(score)
-      });
+    const group = groups.get(currentModuleId);
+    if (group) {
+      group.scores.push(score);
+    } else {
+      groups.set(currentModuleId, { scores: [score], firstQuestion: question });
     }
   }
-  return dedupeByModule(scores);
-}
 
-function findScoreAfter(row: string[], startIndex: number) {
-  for (const cell of row.slice(startIndex + 1, startIndex + 4)) {
-    const value = Number(cell);
-    if (Number.isFinite(value) && value >= 0 && value <= 5) return value;
+  const scores: ModuleScore[] = [];
+  for (const [moduleId, group] of groups) {
+    const average = Math.round((group.scores.reduce((sum, value) => sum + value, 0) / group.scores.length) * 100) / 100;
+    const standardName = defaultModules.find((module) => module.id === moduleId)?.name ?? `모듈${moduleId}`;
+    scores.push({
+      moduleId,
+      moduleName: standardName,
+      question: group.firstQuestion,
+      score: average,
+      stage: scoreStage(average)
+    });
   }
-  return null;
+  return dedupeByModule(scores);
 }
 
 function findTrailingScore(row: string[]) {
