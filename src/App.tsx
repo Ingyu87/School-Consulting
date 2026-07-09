@@ -20,6 +20,7 @@ import { InterviewFormView } from "./components/InterviewFormView";
 import { PlanFormView } from "./components/PlanFormView";
 import { SchoolInfoForm } from "./components/SchoolInfoForm";
 import { generateAiDraft } from "./lib/ai";
+import { applyAiDraftToState, mergeModuleContentUpdate } from "./lib/aiApply";
 import { summarizeInterviewTranscript, transcribeInterviewSegment } from "./lib/audio";
 import { createInitialState, hasExistingWork, hydrateState } from "./lib/defaults";
 import { buildInsights, stageDescriptions, stageTone } from "./lib/diagnosis";
@@ -64,6 +65,7 @@ export default function App() {
   const [docxGenerating, setDocxGenerating] = useState<"interview" | "plan" | null>(null);
   const [completionNotice, setCompletionNotice] = useState<{ title: string; detail: string } | null>(null);
   const [toastNotice, setToastNotice] = useState<{ tone: "ok" | "error"; message: string } | null>(null);
+  const [aiUndo, setAiUndo] = useState<{ state: AppState; label: string } | null>(null);
 
   const stateRef = useRef(state);
   // 리셋/새 CSV 업로드마다 증가시켜, 그 이전에 보낸 AI 요청의 응답이 늦게 도착해도 무시하도록 한다.
@@ -187,6 +189,7 @@ export default function App() {
         }
       }
       requestEpochRef.current += 1;
+      setAiUndo(null);
       const fresh = createInitialState();
       let neisPatch: Partial<SchoolInfo> = {};
       let neisMessage = "";
@@ -276,6 +279,7 @@ export default function App() {
     }
 
     const requestEpoch = requestEpochRef.current;
+    const undoState = stateRef.current;
     setAiStatus("AI 초안 생성 중");
     setAiDraftingTask(task);
     try {
@@ -295,64 +299,12 @@ export default function App() {
         return;
       }
 
-      setState((current) => {
-        const nextModules = draft.moduleUpdates?.length
-          ? current.modules.map((module) => {
-              const update = draft.moduleUpdates?.find((item) => item.id === module.id);
-              if (!update) return module;
-              return mergeModuleContentUpdate(module, update);
-            })
-          : current.modules;
-        const applyDiagnosis = task === "diagnosis";
-        const applyInterviewCore = task === "interview-plan" && draftSection === "interview-core";
-        const applyInterviewSummary = task === "interview-plan" && draftSection === "interview-summary";
-        const applySecondInterview = task === "interview-plan" && draftSection === "second-interview";
-        const applyIssueGoals = task === "interview-plan" && draftSection === "issue-goals";
-        const applyRoadmap = task === "interview-plan" && draftSection === "roadmap";
-
-        return {
-          ...current,
-          modules: task === "module-content" ? nextModules : current.modules,
-          interview: {
-            ...current.interview,
-            priorLevel: applyInterviewCore ? draft.priorLevel ?? current.interview.priorLevel : current.interview.priorLevel,
-            infraConsiderations: applyInterviewCore ? draft.infraConsiderations ?? current.interview.infraConsiderations : current.interview.infraConsiderations,
-            schoolRequests: applyInterviewCore ? draft.schoolRequests ?? current.interview.schoolRequests : current.interview.schoolRequests,
-            additionalChecks: applyInterviewCore ? draft.additionalChecks ?? current.interview.additionalChecks : current.interview.additionalChecks,
-            participationGoal: applyInterviewCore ? draft.participationGoal ?? current.interview.participationGoal : current.interview.participationGoal,
-            resultSummary: applyInterviewCore ? draft.interviewResultSummary ?? current.interview.resultSummary : current.interview.resultSummary
-          },
-          plan: {
-            ...current.plan,
-            editedInsights: applyDiagnosis ? draft.diagnosisInsight ?? current.plan.editedInsights : current.plan.editedInsights,
-            diagnosisImplications: applyDiagnosis ? draft.diagnosisImplications ?? current.plan.diagnosisImplications : current.plan.diagnosisImplications,
-            insightSource: applyDiagnosis && draft.diagnosisInsight ? "ai" : current.plan.insightSource,
-            strengths: applyDiagnosis ? draft.strength1 ?? current.plan.strengths : current.plan.strengths,
-            strength1: applyDiagnosis ? draft.strength1 ?? current.plan.strength1 : current.plan.strength1,
-            strength2: applyDiagnosis ? draft.strength2 ?? current.plan.strength2 : current.plan.strength2,
-            challenges: applyDiagnosis ? draft.challenge1 ?? current.plan.challenges : current.plan.challenges,
-            challenge1: applyDiagnosis ? draft.challenge1 ?? current.plan.challenge1 : current.plan.challenge1,
-            challenge2: applyDiagnosis ? draft.challenge2 ?? current.plan.challenge2 : current.plan.challenge2,
-            interviewSummary: applyInterviewSummary ? draft.interviewSummary ?? current.plan.interviewSummary : current.plan.interviewSummary,
-            issueGoals: applyIssueGoals ? normalizeIssueGoals(draft.issueGoals) ?? current.plan.issueGoals : current.plan.issueGoals,
-            roadmapDirection: applyIssueGoals || applyRoadmap ? draft.roadmapDirection ?? current.plan.roadmapDirection : current.plan.roadmapDirection,
-            roadmapNotes: applyRoadmap ? draft.roadmapNotes ?? current.plan.roadmapNotes : current.plan.roadmapNotes,
-            secondInterview: {
-              ...current.plan.secondInterview,
-              resultSummary:
-                applySecondInterview
-                  ? draft.interviewSummary ?? draft.interviewResultSummary ?? current.plan.secondInterview.resultSummary
-                  : current.plan.secondInterview.resultSummary,
-              futurePlans:
-                applySecondInterview
-                  ? draft.roadmapDirection ?? current.plan.secondInterview.futurePlans
-                  : current.plan.secondInterview.futurePlans
-            }
-          },
-          activeTab: nextTab ?? (task === "diagnosis" ? "diagnosis" : task === "interview-plan" ? "interview" : "modules")
-        };
-      });
+      setState((current) => ({
+        ...applyAiDraftToState(current, draft, task, draftSection),
+        activeTab: nextTab ?? (task === "diagnosis" ? "diagnosis" : task === "interview-plan" ? "interview" : "modules")
+      }));
       setAiStatus("AI 초안 생성 완료");
+      setAiUndo({ state: undoState, label: task === "diagnosis" ? "AI 심층 분석" : sectionCompletionText(draftSection).replace("을 반영했습니다.", "") });
       showCompletion("생성 완료", task === "diagnosis" ? "AI 심층 분석 결과를 반영했습니다." : sectionCompletionText(draftSection));
     } catch (error) {
       setAiStatus(error instanceof Error ? error.message : "AI 초안 생성 실패");
@@ -371,6 +323,7 @@ export default function App() {
     if (!targetModule) return;
 
     const requestEpoch = requestEpochRef.current;
+    const undoState = stateRef.current;
     setModuleDraftingId(moduleId);
     setAiStatus(`${targetModule.id}. ${targetModule.name} AI 초안 생성 중`);
     try {
@@ -401,6 +354,7 @@ export default function App() {
         activeTab: "modules"
       }));
       setAiStatus(`${targetModule.id}. ${targetModule.name} AI 초안 작성 완료`);
+      setAiUndo({ state: undoState, label: `${targetModule.id}. ${targetModule.name} AI 초안` });
       showCompletion("생성 완료", `${targetModule.id}. ${targetModule.name} 초안을 반영했습니다.`);
     } catch (error) {
       setAiStatus(error instanceof Error ? error.message : "AI 초안 생성 실패");
@@ -674,6 +628,7 @@ export default function App() {
         throw new Error("이 앱의 백업 JSON 형식이 아닙니다.");
       }
       requestEpochRef.current += 1;
+      setAiUndo(null);
       cancelRecording();
       setState(hydrateState(parsed));
       setUploadStatus("작업 파일을 불러왔습니다.");
@@ -688,6 +643,7 @@ export default function App() {
     const confirmed = window.confirm("현재 입력한 내용과 자동저장된 작업을 모두 지우고 처음부터 시작할까요?");
     if (!confirmed) return;
     requestEpochRef.current += 1;
+    setAiUndo(null);
     cancelRecording();
     await clearState();
     setState(createInitialState());
@@ -696,6 +652,15 @@ export default function App() {
     setAiStatus("");
     setRecordingStatus("");
     setSaveStatus("새 프로젝트");
+  }
+
+  function undoLastAiApply() {
+    if (!aiUndo) return;
+    requestEpochRef.current += 1;
+    setState(aiUndo.state);
+    setAiStatus(`${aiUndo.label} 적용을 되돌렸습니다.`);
+    setAiUndo(null);
+    showToast("AI 적용 내용을 되돌렸습니다.");
   }
 
   return (
@@ -783,6 +748,11 @@ export default function App() {
               <div>
                 <strong>{completionNotice.title}</strong>
                 <span>{completionNotice.detail}</span>
+                {aiUndo && (
+                  <button className="toastAction" onClick={undoLastAiApply} type="button">
+                    AI 적용 되돌리기
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -1401,31 +1371,6 @@ function mergeModuleAiUpdate(module: TrainingModule, update: AiModuleUpdate, sch
     materials: update.materials ?? module.materials,
     place: update.place || module.place || schoolName
   };
-}
-
-function mergeModuleContentUpdate(module: TrainingModule, update: AiModuleUpdate): TrainingModule {
-  return {
-    ...module,
-    programName: update.programName ?? module.programName,
-    schoolVoice: update.schoolVoice ?? module.schoolVoice,
-    editableProgram: update.editableProgram ?? module.editableProgram,
-    expectedEffect: update.expectedEffect ?? module.expectedEffect,
-    materials: update.materials ?? module.materials
-  };
-}
-
-function normalizeIssueGoals(value: unknown) {
-  if (!Array.isArray(value) || value.length === 0) return undefined;
-  const issueGoals = [
-    { issue: "", goal: "" },
-    { issue: "", goal: "" },
-    { issue: "", goal: "" }
-  ];
-  value.slice(0, 3).forEach((item, index) => {
-    if (!item || typeof item !== "object") return;
-    issueGoals[index] = { issue: String((item as any).issue ?? ""), goal: String((item as any).goal ?? "") };
-  });
-  return issueGoals;
 }
 
 function escapeCsv(value: string) {
