@@ -75,6 +75,7 @@ export default function App() {
   const finalizingRef = useRef(false);
   const cancelledRef = useRef(false);
   const transcriptPartsRef = useRef<string[]>([]);
+  const transcriptBeforeRecordingRef = useRef("");
   const transcribeQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
@@ -416,7 +417,8 @@ export default function App() {
       finalizingRef.current = false;
       cancelledRef.current = false;
       segmentIndexRef.current = 0;
-      transcriptPartsRef.current = stateRef.current.interview.transcript ? [stateRef.current.interview.transcript] : [];
+      transcriptBeforeRecordingRef.current = stateRef.current.interview.transcript;
+      transcriptPartsRef.current = transcriptBeforeRecordingRef.current ? [transcriptBeforeRecordingRef.current] : [];
       transcribeQueueRef.current = Promise.resolve();
       setIsRecording(true);
       setRecordingStatus("녹음 중 · 3분 단위로 자동 전사됩니다.");
@@ -538,6 +540,11 @@ export default function App() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     setIsRecording(false);
+    transcriptPartsRef.current = transcriptBeforeRecordingRef.current ? [transcriptBeforeRecordingRef.current] : [];
+    setState((current) => ({
+      ...current,
+      interview: { ...current.interview, transcript: transcriptBeforeRecordingRef.current }
+    }));
     setRecordingStatus("녹음을 취소했습니다. 전사와 요약을 반영하지 않습니다.");
   }
 
@@ -568,8 +575,6 @@ export default function App() {
 
   function validateBeforeDownload(kind: "interview" | "plan") {
     if (!state.project) return "진단 CSV를 먼저 업로드해주세요.";
-    const blockingRule = validations.find((item) => item.level === "error");
-    if (blockingRule) return blockingRule.message;
     if (kind === "interview") {
       if (!state.interview.dateTime.trim()) return "심층면담 일시를 입력해주세요.";
       if (!state.interview.participationGoal.trim() || !state.interview.resultSummary.trim()) {
@@ -577,6 +582,8 @@ export default function App() {
       }
     }
     if (kind === "plan") {
+      const blockingRule = validations.find((item) => item.level === "error");
+      if (blockingRule) return blockingRule.message;
       if (!state.plan.strength1.trim() || !state.plan.challenge1.trim()) return "운영계획서 강점과 도전 과제를 작성해주세요.";
       if (!state.plan.roadmapDirection.trim() || !state.plan.roadmapNotes.trim()) return "로드맵 방향과 기대효과 종합 의견을 작성해주세요.";
     }
@@ -622,6 +629,15 @@ export default function App() {
   }
 
   function downloadScheduleCsv() {
+    if (!state.project) {
+      showToast("진단 CSV를 먼저 업로드해주세요.", "error");
+      return;
+    }
+    const blockingRule = validations.find((item) => item.level === "error");
+    if (blockingRule) {
+      showToast(blockingRule.message, "error");
+      return;
+    }
     const schoolName = state.project?.schoolName ?? "새학교";
     const rows = [
       ["순번", "과정", "대상", "차시", "일정", "시간", "장소", "인원", "방식", "중점 도구", "운영 주제", "준비물/확인사항"],

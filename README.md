@@ -55,7 +55,7 @@ npm run build
 
 - 작업 백업 JSON에는 학교 정보, 입력 내용, AI 초안, 면담 전사 내용이 포함됩니다. 개인정보와 면담 기록 관리에 유의해야 합니다.
 - 녹음 전사와 AI 초안은 브라우저, Vercel Functions, Gemini API를 경유합니다.
-- 배포 URL이 공개되면 API 호출 비용이 발생할 수 있으므로 운영 환경에서는 접근 제한 또는 rate limit 설정이 필요합니다.
+- 앱에는 함수 인스턴스 단위의 기본 rate limit만 들어 있습니다. cold start나 다중 인스턴스에서는 초기화될 수 있으므로 공개 운영 시 Vercel Password Protection, IP allowlist, 사내망/VPN, 별도 인증 같은 접근 제한이 필요합니다.
 - 원본 CSV/PDF 파일 자체는 백업 JSON에 포함되지 않습니다.
 
 ## 문서
