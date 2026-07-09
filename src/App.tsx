@@ -26,7 +26,7 @@ import { buildInsights, stageDescriptions, stageTone } from "./lib/diagnosis";
 import { parseDiagnosisCsv } from "./lib/csv/parseDiagnosisCsv";
 import { parseLectureScheduleCsv } from "./lib/csv/parseLectureScheduleCsv";
 import { fetchNeisSchoolInfo, mapNeisToSchoolInfo } from "./lib/neis";
-import { clearState, loadState, saveState } from "./lib/storage";
+import { clearState, compactStoredState, loadState, saveState } from "./lib/storage";
 import { validateModules } from "./lib/validation";
 import { noticeItems } from "./data/officialOptions";
 import type { AiDraftRequest, AiModuleUpdate, AppState, InterviewState, ModuleScore, PlanState, SchoolInfo, TrainingModule } from "./types";
@@ -302,42 +302,48 @@ export default function App() {
               return mergeModuleContentUpdate(module, update);
             })
           : current.modules;
+        const applyDiagnosis = task === "diagnosis";
+        const applyInterviewCore = task === "interview-plan" && draftSection === "interview-core";
+        const applyInterviewSummary = task === "interview-plan" && draftSection === "interview-summary";
+        const applySecondInterview = task === "interview-plan" && draftSection === "second-interview";
+        const applyIssueGoals = task === "interview-plan" && draftSection === "issue-goals";
+        const applyRoadmap = task === "interview-plan" && draftSection === "roadmap";
 
         return {
           ...current,
-          modules: nextModules,
+          modules: task === "module-content" ? nextModules : current.modules,
           interview: {
             ...current.interview,
-            priorLevel: draft.priorLevel ?? current.interview.priorLevel,
-            infraConsiderations: draft.infraConsiderations ?? current.interview.infraConsiderations,
-            schoolRequests: draft.schoolRequests ?? current.interview.schoolRequests,
-            additionalChecks: draft.additionalChecks ?? current.interview.additionalChecks,
-            participationGoal: draft.participationGoal ?? current.interview.participationGoal,
-            resultSummary: draft.interviewResultSummary ?? current.interview.resultSummary
+            priorLevel: applyInterviewCore ? draft.priorLevel ?? current.interview.priorLevel : current.interview.priorLevel,
+            infraConsiderations: applyInterviewCore ? draft.infraConsiderations ?? current.interview.infraConsiderations : current.interview.infraConsiderations,
+            schoolRequests: applyInterviewCore ? draft.schoolRequests ?? current.interview.schoolRequests : current.interview.schoolRequests,
+            additionalChecks: applyInterviewCore ? draft.additionalChecks ?? current.interview.additionalChecks : current.interview.additionalChecks,
+            participationGoal: applyInterviewCore ? draft.participationGoal ?? current.interview.participationGoal : current.interview.participationGoal,
+            resultSummary: applyInterviewCore ? draft.interviewResultSummary ?? current.interview.resultSummary : current.interview.resultSummary
           },
           plan: {
             ...current.plan,
-            editedInsights: draft.diagnosisInsight ?? current.plan.editedInsights,
-            diagnosisImplications: draft.diagnosisImplications ?? current.plan.diagnosisImplications,
-            insightSource: draft.diagnosisInsight ? "ai" : current.plan.insightSource,
-            strengths: draft.strength1 ?? current.plan.strengths,
-            strength1: draft.strength1 ?? current.plan.strength1,
-            strength2: draft.strength2 ?? current.plan.strength2,
-            challenges: draft.challenge1 ?? current.plan.challenges,
-            challenge1: draft.challenge1 ?? current.plan.challenge1,
-            challenge2: draft.challenge2 ?? current.plan.challenge2,
-            interviewSummary: draft.interviewSummary ?? current.plan.interviewSummary,
-            issueGoals: normalizeIssueGoals(draft.issueGoals) ?? current.plan.issueGoals,
-            roadmapDirection: draft.roadmapDirection ?? current.plan.roadmapDirection,
-            roadmapNotes: draft.roadmapNotes ?? current.plan.roadmapNotes,
+            editedInsights: applyDiagnosis ? draft.diagnosisInsight ?? current.plan.editedInsights : current.plan.editedInsights,
+            diagnosisImplications: applyDiagnosis ? draft.diagnosisImplications ?? current.plan.diagnosisImplications : current.plan.diagnosisImplications,
+            insightSource: applyDiagnosis && draft.diagnosisInsight ? "ai" : current.plan.insightSource,
+            strengths: applyDiagnosis ? draft.strength1 ?? current.plan.strengths : current.plan.strengths,
+            strength1: applyDiagnosis ? draft.strength1 ?? current.plan.strength1 : current.plan.strength1,
+            strength2: applyDiagnosis ? draft.strength2 ?? current.plan.strength2 : current.plan.strength2,
+            challenges: applyDiagnosis ? draft.challenge1 ?? current.plan.challenges : current.plan.challenges,
+            challenge1: applyDiagnosis ? draft.challenge1 ?? current.plan.challenge1 : current.plan.challenge1,
+            challenge2: applyDiagnosis ? draft.challenge2 ?? current.plan.challenge2 : current.plan.challenge2,
+            interviewSummary: applyInterviewSummary ? draft.interviewSummary ?? current.plan.interviewSummary : current.plan.interviewSummary,
+            issueGoals: applyIssueGoals ? normalizeIssueGoals(draft.issueGoals) ?? current.plan.issueGoals : current.plan.issueGoals,
+            roadmapDirection: applyIssueGoals || applyRoadmap ? draft.roadmapDirection ?? current.plan.roadmapDirection : current.plan.roadmapDirection,
+            roadmapNotes: applyRoadmap ? draft.roadmapNotes ?? current.plan.roadmapNotes : current.plan.roadmapNotes,
             secondInterview: {
               ...current.plan.secondInterview,
               resultSummary:
-                draftSection === "second-interview"
+                applySecondInterview
                   ? draft.interviewSummary ?? draft.interviewResultSummary ?? current.plan.secondInterview.resultSummary
                   : current.plan.secondInterview.resultSummary,
               futurePlans:
-                draftSection === "second-interview"
+                applySecondInterview
                   ? draft.roadmapDirection ?? current.plan.secondInterview.futurePlans
                   : current.plan.secondInterview.futurePlans
             }
@@ -460,7 +466,7 @@ export default function App() {
           if (transcript.trim()) appendTranscript(transcript.trim());
         } catch (error) {
           if (cancelledRef.current) return;
-          appendTranscript(`(구간 ${index + 1} 전사 실패: ${error instanceof Error ? error.message : "알 수 없는 오류"})`);
+          setRecordingStatus(`구간 ${index + 1} 전사 실패: ${error instanceof Error ? error.message : "알 수 없는 오류"}`);
         }
       }
       if (cancelledRef.current) return;
@@ -498,7 +504,8 @@ export default function App() {
           schoolRequests: summary.schoolRequests || current.interview.schoolRequests,
           additionalChecks: summary.additionalChecks || current.interview.additionalChecks,
           participationGoal: summary.participationGoal || current.interview.participationGoal,
-          resultSummary: summary.resultSummary || current.interview.resultSummary
+          resultSummary: summary.resultSummary || current.interview.resultSummary,
+          followUpQuestions: summary.followUpQuestions?.length ? summary.followUpQuestions : current.interview.followUpQuestions
         },
         plan: {
           ...current.plan,
@@ -531,6 +538,7 @@ export default function App() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     setIsRecording(false);
+    setRecordingStatus("녹음을 취소했습니다. 전사와 요약을 반영하지 않습니다.");
   }
 
   function applyModule(id: number) {
@@ -548,7 +556,7 @@ export default function App() {
   }
 
   function downloadBackup() {
-    const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json;charset=utf-8" });
+    const blob = new Blob([JSON.stringify(compactStoredState(state), null, 2)], { type: "application/json;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -558,8 +566,30 @@ export default function App() {
     showToast("작업 JSON을 저장했습니다.");
   }
 
+  function validateBeforeDownload(kind: "interview" | "plan") {
+    if (!state.project) return "진단 CSV를 먼저 업로드해주세요.";
+    const blockingRule = validations.find((item) => item.level === "error");
+    if (blockingRule) return blockingRule.message;
+    if (kind === "interview") {
+      if (!state.interview.dateTime.trim()) return "심층면담 일시를 입력해주세요.";
+      if (!state.interview.participationGoal.trim() || !state.interview.resultSummary.trim()) {
+        return "심층면담 결과 핵심 요약의 참여 목표와 면담 핵심 결과를 작성해주세요.";
+      }
+    }
+    if (kind === "plan") {
+      if (!state.plan.strength1.trim() || !state.plan.challenge1.trim()) return "운영계획서 강점과 도전 과제를 작성해주세요.";
+      if (!state.plan.roadmapDirection.trim() || !state.plan.roadmapNotes.trim()) return "로드맵 방향과 기대효과 종합 의견을 작성해주세요.";
+    }
+    return "";
+  }
+
   async function handleDownloadInterviewDocx() {
     if (docxGenerating) return;
+    const validationMessage = validateBeforeDownload("interview");
+    if (validationMessage) {
+      showToast(validationMessage, "error");
+      return;
+    }
     setDocxGenerating("interview");
     try {
       const { downloadInterviewDocx } = await import("./lib/docx/exportDocs");
@@ -574,6 +604,11 @@ export default function App() {
 
   async function handleDownloadPlanDocx() {
     if (docxGenerating) return;
+    const validationMessage = validateBeforeDownload("plan");
+    if (validationMessage) {
+      showToast(validationMessage, "error");
+      return;
+    }
     setDocxGenerating("plan");
     try {
       const { downloadPlanDocx } = await import("./lib/docx/exportDocs");
@@ -622,6 +657,8 @@ export default function App() {
       if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as { modules?: unknown }).modules)) {
         throw new Error("이 앱의 백업 JSON 형식이 아닙니다.");
       }
+      requestEpochRef.current += 1;
+      cancelRecording();
       setState(hydrateState(parsed));
       setUploadStatus("작업 파일을 불러왔습니다.");
       showToast("작업 JSON을 불러왔습니다.");
@@ -680,6 +717,11 @@ export default function App() {
                 {isRecording ? <Square size={16} /> : <Mic size={16} />}
                 {isRecording ? "녹음 종료" : "녹음 시작"}
               </button>
+              {isRecording && (
+                <button className="resetButton" onClick={cancelRecording} type="button">
+                  녹음 취소
+                </button>
+              )}
             </div>
             <span>{recordingStatus || (state.interview.transcript ? "전사 내용이 AI 초안에 반영됩니다." : "녹음 후 전사 내용이 AI 초안에 반영됩니다.")}</span>
             {showTranscript && (
@@ -755,10 +797,14 @@ export default function App() {
           <span>식사와 다과 안내는 공식 운영 기준에 따라 표시됩니다.</span>
         </section>
 
-        {state.activeTab === "guide" && uploadStatus && <div className="notice">{uploadStatus}</div>}
-        {state.activeTab === "guide" && scheduleStatus && <div className="notice scheduleNotice"><CalendarDays size={17} />{scheduleStatus}</div>}
-        {state.activeTab === "guide" && aiStatus && <div className="notice aiNotice"><Sparkles size={17} />{aiStatus}</div>}
-        {state.activeTab === "guide" && recordingStatus && <div className="notice recordingNotice"><Mic size={17} />{recordingStatus}</div>}
+        {(uploadStatus || scheduleStatus || aiStatus || recordingStatus) && (
+          <section className="noticeStack" aria-live="polite">
+            {uploadStatus && <div className="notice">{uploadStatus}</div>}
+            {scheduleStatus && <div className="notice scheduleNotice"><CalendarDays size={17} />{scheduleStatus}</div>}
+            {aiStatus && <div className="notice aiNotice"><Sparkles size={17} />{aiStatus}</div>}
+            {recordingStatus && <div className="notice recordingNotice"><Mic size={17} />{recordingStatus}</div>}
+          </section>
+        )}
         {isAiBusy && state.activeTab !== "guide" && (
           <div className="aiWaitingPanel" role="status" aria-live="polite">
             <Suspense fallback={<div className="aiWaitingLottie" />}>
@@ -853,7 +899,7 @@ export default function App() {
                 </table>
               </div>
             </article>
-            {false && (state.project?.infrastructureDistributions.length ?? 0) > 0 && (
+            {(state.project?.infrastructureDistributions.length ?? 0) > 0 && (
               <article className="panel wide">
                 <h2>학교 디지털 기반 교육 현황 — 문항별 응답 분포</h2>
                 <p className="formHint">운영계획서 Ⅰ장 현황표에 그대로 출력됩니다.</p>
@@ -875,7 +921,7 @@ export default function App() {
                 ))}
               </article>
             )}
-            {false && (state.project?.openEndedQuestions.length ?? 0) > 0 && (
+            {(state.project?.openEndedQuestions.length ?? 0) > 0 && (
               <article className="panel wide">
                 <h2>서술형 응답 정리</h2>
                 {state.project!.openEndedQuestions.map((question) => (

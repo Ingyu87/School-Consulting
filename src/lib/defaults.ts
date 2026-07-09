@@ -55,7 +55,8 @@ export function createInitialInterview(): InterviewState {
     additionalChecks: "",
     participationGoal: "",
     transcript: "",
-    resultSummary: ""
+    resultSummary: "",
+    followUpQuestions: []
   };
 }
 
@@ -132,6 +133,9 @@ export function hydrateState(saved: unknown): AppState {
   interview.teachers = normalizeTeachers(rawInterview.teachers);
   interview.noticeChecks = normalizeNoticeChecks(rawInterview.noticeChecks);
   interview.goals = Array.isArray(rawInterview.goals) ? rawInterview.goals.filter((item: unknown) => typeof item === "string") : [];
+  interview.followUpQuestions = Array.isArray(rawInterview.followUpQuestions)
+    ? rawInterview.followUpQuestions.filter((item: unknown) => typeof item === "string")
+    : [];
   // 구버전 마이그레이션
   if (!interview.leadCoordinator && typeof rawInterview.coordinators === "string") {
     const parts = rawInterview.coordinators.split(",").map((item: string) => item.trim()).filter(Boolean);

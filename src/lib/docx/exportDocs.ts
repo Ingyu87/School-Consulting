@@ -13,7 +13,7 @@ import {
   VerticalAlign,
   WidthType
 } from "docx";
-import type { AppState, TrainingModule } from "../../types";
+import type { AppState, ModuleScore, TrainingModule } from "../../types";
 import { buildInsights, stageDescriptions } from "../diagnosis";
 import {
   capabilityOptions,
@@ -184,15 +184,14 @@ export async function downloadPlanDocx(state: AppState) {
           ...infrastructureBlocks(state),
           subLabel("사전 진단 – 과정별 진단 분석 결과"),
           table(
-            [["구분", "평균 점수", "단계", "자가 진단 분석 결과", "시사점"]],
+            [["구분", "평균 점수", "단계", "자가 진단 분석 결과 및 시사점"]],
             (state.project?.moduleScores ?? []).map((score) => [
               `모듈${score.moduleId} ${score.moduleName}`,
               score.score.toFixed(2),
               score.stage,
-              score.question || `${score.moduleName} 평균 ${score.score.toFixed(2)}점`,
-              plan.diagnosisImplications?.[String(score.moduleId)] ?? ""
+              diagnosisDocxText(score, plan.diagnosisImplications?.[String(score.moduleId)] ?? "")
             ]),
-            [22, 10, 8, 30, 30]
+            [22, 10, 8, 60]
           ),
           table(
             [["도약 단계", "만족 단계", "추월 단계"]],
@@ -427,6 +426,33 @@ function bullets(items: string[]) {
         children: [new TextRun({ text: item, size: 20 })]
       })
   );
+}
+
+function diagnosisDocxText(score: ModuleScore, aiText: string) {
+  const cleaned = polishDocxText(aiText);
+  if (cleaned) return cleaned;
+  if (score.score < 3.8) {
+    return `${score.moduleName} 영역은 평균 ${score.score.toFixed(2)}점으로 도약 단계입니다. 구성원의 공감대와 실행 기반을 우선 확인하고, 연수에서 기초 개념과 안전한 실습을 충분히 다룰 필요가 있습니다.`;
+  }
+  if (score.score < 4.6) {
+    return `${score.moduleName} 영역은 평균 ${score.score.toFixed(2)}점으로 만족 단계입니다. 기본 이해와 실행 의지는 형성되어 있으므로, 학교 상황에 맞는 실습과 공동 설계를 통해 실제 적용력을 높일 필요가 있습니다.`;
+  }
+  return `${score.moduleName} 영역은 평균 ${score.score.toFixed(2)}점으로 추월 단계입니다. 학교의 강점 사례로 활용하고 다른 과정과 연결해 지속 가능한 운영 모델로 확산하는 방향이 적절합니다.`;
+}
+
+function polishDocxText(text: string) {
+  return String(text ?? "")
+    .replace(/^시사점[:：]?\s*/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/단계임을 확인함/g, "단계로 해석됩니다")
+    .replace(/것으로 예측됨/g, "것으로 보입니다")
+    .replace(/확인함/g, "확인됩니다")
+    .replace(/마련함/g, "마련할 필요가 있습니다")
+    .replace(/극대화함/g, "높일 필요가 있습니다")
+    .replace(/개발함/g, "개발할 필요가 있습니다")
+    .replace(/정립함/g, "정립할 필요가 있습니다")
+    .replace(/공유함/g, "공유할 필요가 있습니다");
 }
 
 function kvTable(rows: [string, string][], labelWidth = 25) {

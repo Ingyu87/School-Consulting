@@ -12,9 +12,16 @@ export async function loadState() {
 }
 
 export async function saveState(state: AppState) {
-  await localforage.setItem(STORAGE_KEY, state);
+  await localforage.setItem(STORAGE_KEY, compactStoredState(state));
 }
 
 export async function clearState() {
   await localforage.removeItem(STORAGE_KEY);
+}
+
+export function compactStoredState(state: AppState): AppState {
+  return {
+    ...state,
+    project: state.project ? { ...state.project, rawRows: [] } : null
+  };
 }

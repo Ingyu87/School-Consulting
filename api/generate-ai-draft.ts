@@ -1,11 +1,13 @@
 import { GoogleGenAI } from "@google/genai";
 import { DEFAULT_MODEL, generateContentWithFallback } from "./_lib/gemini";
+import { checkRateLimit } from "./_lib/rate-limit";
 
 export default async function handler(request: any, response: any) {
   if (request.method !== "POST") {
     response.setHeader("Allow", "POST");
     return response.status(405).send("Method Not Allowed");
   }
+  if (!checkRateLimit(request, response, "generate-ai-draft")) return;
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {

@@ -107,6 +107,7 @@ export type InterviewState = {
   participationGoal: string;
   transcript: string;
   resultSummary: string;
+  followUpQuestions: string[];
 };
 
 export type IssueGoal = {

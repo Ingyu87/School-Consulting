@@ -1,3 +1,5 @@
+import { checkRateLimit } from "./_lib/rate-limit";
+
 const NEIS_BASE_URL = "https://open.neis.go.kr/hub/schoolInfo";
 
 export default async function handler(request: any, response: any) {
@@ -5,6 +7,7 @@ export default async function handler(request: any, response: any) {
     response.setHeader("Allow", "GET");
     return response.status(405).send("Method Not Allowed");
   }
+  if (!checkRateLimit(request, response, "neis-school-info")) return;
 
   const apiKey = process.env.NEIS_API_KEY;
   if (!apiKey) {

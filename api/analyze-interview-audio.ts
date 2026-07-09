@@ -1,5 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { DEFAULT_MODEL, generateContentWithFallback } from "./_lib/gemini";
+import { checkRateLimit } from "./_lib/rate-limit";
 
 /**
  * 심층면담 녹음 처리 API.
@@ -11,6 +12,7 @@ export default async function handler(request: any, response: any) {
     response.setHeader("Allow", "POST");
     return response.status(405).send("Method Not Allowed");
   }
+  if (!checkRateLimit(request, response, "analyze-interview-audio")) return;
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return response.status(500).send("GEMINI_API_KEY 환경변수가 설정되지 않았습니다.");

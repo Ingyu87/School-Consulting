@@ -87,6 +87,16 @@ export function InterviewFormView({ interview, onChange }: Props) {
         <p className="formHint">녹음 전사, 입력된 면담 내용, 진단 결과, 연수 구성을 함께 참고해 참여 목표와 면담 핵심 결과 초안을 작성합니다.</p>
         <FormArea label="면담 대상 학교의 연수 참여 목표" value={interview.participationGoal} onChange={(participationGoal) => onChange({ participationGoal })} compact />
         <FormArea label="면담 핵심 결과" value={interview.resultSummary} onChange={(resultSummary) => onChange({ resultSummary })} />
+        {interview.followUpQuestions.length > 0 && (
+          <div className="followUpBox">
+            <strong>추가 확인 질문</strong>
+            <ul>
+              {interview.followUpQuestions.map((question, index) => (
+                <li key={`${question}-${index}`}>{question}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         <p className="formHint">※ 심층면담 운영 시 현장 사진 및 회의 참여자 서명부 수령 필수</p>
       </div>
     </>
