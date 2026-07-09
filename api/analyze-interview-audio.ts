@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
-import { DEFAULT_MODEL, generateContentWithFallback } from "./_lib/gemini";
-import { checkRateLimit } from "./_lib/rate-limit";
+import { DEFAULT_MODEL, generateContentWithFallback } from "./_lib/gemini.js";
+import { checkRateLimit } from "./_lib/rate-limit.js";
 
 /**
  * 심층면담 녹음 처리 API.

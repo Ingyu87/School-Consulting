@@ -1,4 +1,4 @@
-import { checkRateLimit } from "./_lib/rate-limit";
+import { checkRateLimit } from "./_lib/rate-limit.js";
 
 const NEIS_BASE_URL = "https://open.neis.go.kr/hub/schoolInfo";
 
