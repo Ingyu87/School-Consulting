@@ -20,7 +20,7 @@ import { InterviewFormView } from "./components/InterviewFormView";
 import { PlanFormView } from "./components/PlanFormView";
 import { SchoolInfoForm } from "./components/SchoolInfoForm";
 import { generateAiDraft } from "./lib/ai";
-import { applyAiDraftToState, mergeModuleContentUpdate } from "./lib/aiApply";
+import { applyAiDraftToState } from "./lib/aiApply";
 import { summarizeInterviewTranscript, transcribeInterviewSegment } from "./lib/audio";
 import { createInitialState, hasExistingWork, hydrateState } from "./lib/defaults";
 import { buildInsights, stageDescriptions, stageTone } from "./lib/diagnosis";
@@ -30,7 +30,7 @@ import { fetchNeisSchoolInfo, mapNeisToSchoolInfo } from "./lib/neis";
 import { clearState, compactStoredState, loadState, saveState } from "./lib/storage";
 import { validateModules } from "./lib/validation";
 import { noticeItems } from "./data/officialOptions";
-import type { AiDraftRequest, AiModuleUpdate, AppState, InterviewState, ModuleScore, PlanState, SchoolInfo, TrainingModule } from "./types";
+import type { AiDraftRequest, AiDraftResponse, AiModuleUpdate, AppState, AppTab, InterviewState, ModuleScore, PlanState, SchoolInfo, TrainingModule } from "./types";
 
 // Vercel 함수 요청 크기 제한(약 4.5MB) 때문에 긴 면담 녹음은 구간으로 나눠 전사한다.
 const SEGMENT_MS = 180_000;
@@ -50,6 +50,16 @@ const tabs = [
 
 const navigationTabs = [...tabs.slice(0, 5), ["guide", "운영 안내"], tabs[5]] as const;
 
+type AiPreviewState = {
+  task: AiDraftRequest["task"];
+  draftSection?: AiDraftRequest["draftSection"];
+  nextTab?: AppTab;
+  draft: AiDraftResponse;
+  moduleId?: number;
+  title: string;
+  detail: string;
+};
+
 export default function App() {
   const [state, setState] = useState<AppState>(createInitialState);
   const [saveStatus, setSaveStatus] = useState("불러오는 중");
@@ -66,6 +76,7 @@ export default function App() {
   const [completionNotice, setCompletionNotice] = useState<{ title: string; detail: string } | null>(null);
   const [toastNotice, setToastNotice] = useState<{ tone: "ok" | "error"; message: string } | null>(null);
   const [aiUndo, setAiUndo] = useState<{ state: AppState; label: string } | null>(null);
+  const [aiPreview, setAiPreview] = useState<AiPreviewState | null>(null);
 
   const stateRef = useRef(state);
   // 리셋/새 CSV 업로드마다 증가시켜, 그 이전에 보낸 AI 요청의 응답이 늦게 도착해도 무시하도록 한다.
@@ -190,6 +201,7 @@ export default function App() {
       }
       requestEpochRef.current += 1;
       setAiUndo(null);
+      setAiPreview(null);
       const fresh = createInitialState();
       let neisPatch: Partial<SchoolInfo> = {};
       let neisMessage = "";
@@ -279,7 +291,6 @@ export default function App() {
     }
 
     const requestEpoch = requestEpochRef.current;
-    const undoState = stateRef.current;
     setAiStatus("AI 초안 생성 중");
     setAiDraftingTask(task);
     try {
@@ -299,13 +310,15 @@ export default function App() {
         return;
       }
 
-      setState((current) => ({
-        ...applyAiDraftToState(current, draft, task, draftSection),
-        activeTab: nextTab ?? (task === "diagnosis" ? "diagnosis" : task === "interview-plan" ? "interview" : "modules")
-      }));
-      setAiStatus("AI 초안 생성 완료");
-      setAiUndo({ state: undoState, label: task === "diagnosis" ? "AI 심층 분석" : sectionCompletionText(draftSection).replace("을 반영했습니다.", "") });
-      showCompletion("생성 완료", task === "diagnosis" ? "AI 심층 분석 결과를 반영했습니다." : sectionCompletionText(draftSection));
+      setAiPreview({
+        task,
+        draftSection,
+        nextTab: nextTab ?? (task === "diagnosis" ? "diagnosis" : task === "interview-plan" ? "interview" : "modules"),
+        draft,
+        title: task === "diagnosis" ? "AI 심층 분석 미리보기" : "AI 초안 미리보기",
+        detail: task === "diagnosis" ? "진단 분석, 강점·과제, 시사점 초안을 확인한 뒤 적용합니다." : sectionPreviewText(draftSection)
+      });
+      setAiStatus("AI 초안 미리보기 생성 완료");
     } catch (error) {
       setAiStatus(error instanceof Error ? error.message : "AI 초안 생성 실패");
     } finally {
@@ -323,7 +336,6 @@ export default function App() {
     if (!targetModule) return;
 
     const requestEpoch = requestEpochRef.current;
-    const undoState = stateRef.current;
     setModuleDraftingId(moduleId);
     setAiStatus(`${targetModule.id}. ${targetModule.name} AI 초안 생성 중`);
     try {
@@ -348,14 +360,15 @@ export default function App() {
         setAiStatus("AI 초안을 받았지만 적용할 과정 내용이 없습니다.");
         return;
       }
-      setState((current) => ({
-        ...current,
-        modules: current.modules.map((module) => (module.id === moduleId ? mergeModuleContentUpdate(module, update) : module)),
-        activeTab: "modules"
-      }));
-      setAiStatus(`${targetModule.id}. ${targetModule.name} AI 초안 작성 완료`);
-      setAiUndo({ state: undoState, label: `${targetModule.id}. ${targetModule.name} AI 초안` });
-      showCompletion("생성 완료", `${targetModule.id}. ${targetModule.name} 초안을 반영했습니다.`);
+      setAiPreview({
+        task: "module-content",
+        nextTab: "modules",
+        draft,
+        moduleId,
+        title: `${targetModule.id}. ${targetModule.name} AI 초안 미리보기`,
+        detail: "프로그램명, 우리학교 목소리, 세부 프로그램, 기대효과, 준비물을 확인한 뒤 적용합니다."
+      });
+      setAiStatus(`${targetModule.id}. ${targetModule.name} AI 초안 미리보기 생성 완료`);
     } catch (error) {
       setAiStatus(error instanceof Error ? error.message : "AI 초안 생성 실패");
     } finally {
@@ -629,6 +642,7 @@ export default function App() {
       }
       requestEpochRef.current += 1;
       setAiUndo(null);
+      setAiPreview(null);
       cancelRecording();
       setState(hydrateState(parsed));
       setUploadStatus("작업 파일을 불러왔습니다.");
@@ -644,6 +658,7 @@ export default function App() {
     if (!confirmed) return;
     requestEpochRef.current += 1;
     setAiUndo(null);
+    setAiPreview(null);
     cancelRecording();
     await clearState();
     setState(createInitialState());
@@ -661,6 +676,30 @@ export default function App() {
     setAiStatus(`${aiUndo.label} 적용을 되돌렸습니다.`);
     setAiUndo(null);
     showToast("AI 적용 내용을 되돌렸습니다.");
+  }
+
+  function applyAiPreview() {
+    if (!aiPreview) return;
+    const undoState = stateRef.current;
+    const label =
+      aiPreview.moduleId != null
+        ? `${aiPreview.moduleId}. ${state.modules.find((module) => module.id === aiPreview.moduleId)?.name ?? "과정"} AI 초안`
+        : aiPreview.task === "diagnosis"
+          ? "AI 심층 분석"
+          : sectionCompletionText(aiPreview.draftSection).replace("을 반영했습니다.", "");
+    setState((current) => ({
+      ...applyAiDraftToState(current, aiPreview.draft, aiPreview.task, aiPreview.draftSection),
+      activeTab: aiPreview.nextTab ?? current.activeTab
+    }));
+    setAiUndo({ state: undoState, label });
+    setAiPreview(null);
+    setAiStatus("AI 초안을 적용했습니다.");
+    showCompletion("적용 완료", aiPreview.task === "diagnosis" ? "AI 심층 분석 결과를 반영했습니다." : `${label}을 반영했습니다.`);
+  }
+
+  function closeAiPreview() {
+    setAiPreview(null);
+    setAiStatus("AI 초안 적용을 취소했습니다.");
   }
 
   return (
@@ -739,6 +778,34 @@ export default function App() {
       </aside>
 
       <main className="main">
+        {aiPreview && (
+          <div className="previewOverlay" role="dialog" aria-modal="true" aria-labelledby="ai-preview-title">
+            <section className="previewDialog">
+              <div className="sectionToolbar">
+                <div>
+                  <p className="eyebrow">적용 전 확인</p>
+                  <h2 id="ai-preview-title">{aiPreview.title}</h2>
+                  <p className="formHint">{aiPreview.detail}</p>
+                </div>
+              </div>
+              <div className="previewList">
+                {previewRows(aiPreview, state.modules).map((row) => (
+                  <div className="previewRow" key={row.label}>
+                    <strong>{row.label}</strong>
+                    <p>{row.value || "작성 내용 없음"}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="previewActions">
+                <button className="button ghost" onClick={closeAiPreview} type="button">취소</button>
+                <button className="button primary" onClick={applyAiPreview} type="button">
+                  <CheckCircle2 size={17} />
+                  이 초안 적용
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
         <div className="feedbackLayer" aria-live="polite">
           {completionNotice && !isAiBusy && (
             <div className="completionToast">
@@ -1321,6 +1388,74 @@ function sectionCompletionText(section?: AiDraftRequest["draftSection"]) {
   if (section === "issue-goals") return "이슈와 목표 도출 초안을 반영했습니다.";
   if (section === "roadmap") return "로드맵 및 기대효과 종합 의견을 반영했습니다.";
   return "AI 초안을 작성해 화면에 반영했습니다.";
+}
+
+function sectionPreviewText(section?: AiDraftRequest["draftSection"]) {
+  if (section === "interview-core") return "Ⅴ. 기타 고려사항과 Ⅵ. 심층면담 결과 핵심 요약에 들어갈 초안을 확인합니다.";
+  if (section === "interview-summary") return "운영계획서의 심층면담 1차 결과 요약 초안을 확인합니다.";
+  if (section === "second-interview") return "심층면담 2차 이상 결과 요약과 향후 예정사항 초안을 확인합니다.";
+  if (section === "issue-goals") return "이슈→목표 도출과 로드맵 방향 초안을 확인합니다.";
+  if (section === "roadmap") return "로드맵 및 기대효과 종합 의견 초안을 확인합니다.";
+  return "AI가 작성한 초안을 확인한 뒤 적용합니다.";
+}
+
+function previewRows(preview: AiPreviewState, modules: TrainingModule[]) {
+  const draft = preview.draft;
+  if (preview.task === "diagnosis") {
+    return [
+      { label: "진단 종합 분석", value: draft.diagnosisInsight },
+      { label: "강점 01", value: draft.strength1 },
+      { label: "강점 02", value: draft.strength2 },
+      { label: "과제 01", value: draft.challenge1 },
+      { label: "과제 02", value: draft.challenge2 },
+      { label: "과정별 분석 및 시사점", value: Object.entries(draft.diagnosisImplications ?? {}).map(([key, value]) => `모듈${key}: ${value}`).join("\n") }
+    ].filter((row) => row.value);
+  }
+  if (preview.task === "module-content") {
+    return (draft.moduleUpdates ?? []).map((update) => {
+      const module = modules.find((item) => item.id === update.id);
+      return {
+        label: `${update.id}. ${module?.name ?? "과정"} 초안`,
+        value: [
+          update.programName && `프로그램명: ${update.programName}`,
+          update.schoolVoice && `우리학교 목소리: ${update.schoolVoice}`,
+          update.editableProgram && `세부 프로그램: ${update.editableProgram}`,
+          update.expectedEffect && `기대효과: ${update.expectedEffect}`,
+          update.materials && `준비물/확인사항: ${update.materials}`
+        ].filter(Boolean).join("\n")
+      };
+    });
+  }
+  if (preview.draftSection === "interview-core") {
+    return [
+      { label: "선행 수준 확인", value: draft.priorLevel },
+      { label: "인프라 환경 고려사항", value: draft.infraConsiderations },
+      { label: "학교 측 별도 요청사항", value: draft.schoolRequests },
+      { label: "기타 확인 필요사항", value: draft.additionalChecks },
+      { label: "면담 대상 학교의 연수 참여 목표", value: draft.participationGoal },
+      { label: "면담 핵심 결과", value: draft.interviewResultSummary }
+    ].filter((row) => row.value);
+  }
+  if (preview.draftSection === "interview-summary") return [{ label: "심층면담 1차 결과 요약", value: draft.interviewSummary }];
+  if (preview.draftSection === "second-interview") {
+    return [
+      { label: "심층면담 2차 이상 결과 요약", value: draft.interviewSummary ?? draft.interviewResultSummary },
+      { label: "향후 예정사항", value: draft.roadmapDirection }
+    ].filter((row) => row.value);
+  }
+  if (preview.draftSection === "issue-goals") {
+    return [
+      { label: "이슈→목표", value: (draft.issueGoals ?? []).map((item, index) => `이슈 0${index + 1}: ${item.issue}\n목표 0${index + 1}: ${item.goal}`).join("\n\n") },
+      { label: "우리학교 혁신 로드맵 방향", value: draft.roadmapDirection }
+    ].filter((row) => row.value);
+  }
+  if (preview.draftSection === "roadmap") {
+    return [
+      { label: "우리학교 혁신 로드맵 방향", value: draft.roadmapDirection },
+      { label: "로드맵 및 기대효과 종합 의견", value: draft.roadmapNotes }
+    ].filter((row) => row.value);
+  }
+  return [{ label: "AI 초안", value: "적용 가능한 초안을 확인했습니다." }];
 }
 
 function diagnosisResultText(score: ModuleScore) {
