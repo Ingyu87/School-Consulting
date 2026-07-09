@@ -181,6 +181,12 @@ function dedupeByModule(scores: ModuleScore[]) {
 }
 
 function parseDistributions(rows: string[][]) {
+  // 이 표는 STEP2 형식(결과/비율 헤더가 있는 응답 분포표)에서만 의미가 있다.
+  // 문항 단위 자가점검표(예: 서울가동초)처럼 이 헤더 자체가 없는 CSV에서는
+  // 아래 휴리스틱이 문항 번호나 섹션 참조 셀을 응답 항목으로 잘못 주워담으므로 아예 건너뛴다.
+  const hasDistributionTable = rows.some((row) => row.some((cell) => cell === "결과" || cell === "비율"));
+  if (!hasDistributionTable) return [];
+
   const distributions: DistributionQuestion[] = [];
   let current: DistributionQuestion | null = null;
 
