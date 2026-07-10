@@ -1,4 +1,4 @@
-import { lazy, Suspense, type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, type ChangeEvent, type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   BarChart3,
@@ -759,7 +759,7 @@ export default function App() {
             <label className="resetButton" {...help("저장해 둔 작업 JSON을 불러와 같은 입력 내용으로 이어서 작성합니다. 원본 CSV/PDF 파일 자체는 포함되지 않습니다.")}>
               <FolderOpen size={16} />
               작업 불러오기
-              <input type="file" accept=".json" onChange={(event) => event.target.files?.[0] && restoreBackup(event.target.files[0])} />
+              <input type="file" accept=".json" onChange={fileInputHandler(restoreBackup)} />
             </label>
             <button className="resetButton" onClick={downloadBackup} {...help("현재 입력 내용과 AI 초안, 연수 구성, 운영계획 입력값을 JSON 파일로 저장합니다. 원본 CSV/PDF 파일 자체는 포함되지 않습니다.")}>
               <Download size={16} />
@@ -844,10 +844,16 @@ export default function App() {
         </header>
 
         <section className="validationStrip">
-          <strong>{selectedHours}차시 구성</strong>
-          <span>최소 12차시까지 {Math.max(0, 12 - selectedHours)}차시 남음</span>
-          <span className={errorCount ? "danger" : "ok"}>{errorCount ? `${errorCount}개 확인 필요` : "운영 기준 충족"}</span>
-          <span>식사와 다과 안내는 공식 운영 기준에 따라 표시됩니다.</span>
+          {state.project ? (
+            <>
+              <strong>{selectedHours}차시 구성</strong>
+              <span>최소 12차시까지 {Math.max(0, 12 - selectedHours)}차시 남음</span>
+              <span className={errorCount ? "danger" : "ok"}>{errorCount ? `${errorCount}개 확인 필요` : "운영 기준 충족"}</span>
+              <span>식사와 다과 안내는 공식 운영 기준에 따라 표시됩니다.</span>
+            </>
+          ) : (
+            <span>진단 CSV를 업로드하면 이 학교의 연수 구성이 운영 기준을 충족하는지 여기에 표시됩니다. 지금 보이는 모듈 선택은 CSV 업로드 전 기본값입니다.</span>
+          )}
         </section>
 
         {(uploadStatus || scheduleStatus || aiStatus || recordingStatus) && (
@@ -881,7 +887,7 @@ export default function App() {
                 <label className="button ghost inlineAction" {...help("사전 자가진단 CSV를 업로드하면 진단 분석을 만들고, NEIS_API_KEY가 있으면 학교기본정보도 자동 조회합니다.")}>
                   <Upload size={17} />
                   진단 CSV 업로드
-                  <input type="file" accept=".csv" onChange={(event) => event.target.files?.[0] && handleCsv(event.target.files[0])} />
+                  <input type="file" accept=".csv" onChange={fileInputHandler(handleCsv)} />
                 </label>
                 <button className="button primary inlineAction" onClick={() => runAiDraft("diagnosis")} disabled={aiDraftingTask === "diagnosis"}>
                   {aiDraftingTask === "diagnosis" ? <span className="aiSpinner" aria-hidden="true" /> : <Sparkles size={17} />}
@@ -1063,7 +1069,7 @@ export default function App() {
                 <label className="button ghost">
                   <CalendarDays size={17} />
                   강의종합 CSV
-                  <input type="file" accept=".csv" onChange={(event) => event.target.files?.[0] && handleLectureScheduleCsv(event.target.files[0])} />
+                  <input type="file" accept=".csv" onChange={fileInputHandler(handleLectureScheduleCsv)} />
                 </label>
               </div>
               <div className="panel moduleAiPanel">
@@ -1167,11 +1173,15 @@ export default function App() {
           <section className="grid">
             <article className="panel">
               <h2>연수 구성 확인</h2>
-              <div className="guideMetric">
-                <strong>{selectedHours}차시 구성</strong>
-                <span>최소 12차시까지 {Math.max(0, 12 - selectedHours)}차시 남음</span>
-                <span className={errorCount ? "danger" : "ok"}>{errorCount ? `${errorCount}개 확인 필요` : "운영 기준 충족"}</span>
-              </div>
+              {state.project ? (
+                <div className="guideMetric">
+                  <strong>{selectedHours}차시 구성</strong>
+                  <span>최소 12차시까지 {Math.max(0, 12 - selectedHours)}차시 남음</span>
+                  <span className={errorCount ? "danger" : "ok"}>{errorCount ? `${errorCount}개 확인 필요` : "운영 기준 충족"}</span>
+                </div>
+              ) : (
+                <p className="formHint">진단 CSV를 업로드하기 전에는 연수 구성 검증을 확정할 수 없습니다.</p>
+              )}
               {validations.map((item) => (
                 <div className={`rule ${item.level}`} key={item.message}>{item.message}</div>
               ))}
@@ -1251,7 +1261,7 @@ export default function App() {
                 <label className="button ghost">
                   <FolderOpen size={17} />
                   작업 불러오기
-                  <input type="file" accept=".json" onChange={(event) => event.target.files?.[0] && restoreBackup(event.target.files[0])} />
+                  <input type="file" accept=".json" onChange={fileInputHandler(restoreBackup)} />
                 </label>
                 <button className="button ghost" onClick={downloadBackup}>
                   <Download size={17} />
@@ -1505,6 +1515,18 @@ function mergeModuleAiUpdate(module: TrainingModule, update: AiModuleUpdate, sch
     expectedEffect: update.expectedEffect ?? module.expectedEffect,
     materials: update.materials ?? module.materials,
     place: update.place || module.place || schoolName
+  };
+}
+
+/**
+ * <input type="file">는 같은 파일을 다시 선택해도 value가 안 바뀌었다고 보고 change 이벤트를
+ * 안 쏜다. 그래서 처리 직후 value를 비워, 사용자가 같은 파일을 다시 골라도 항상 반응하게 한다.
+ */
+function fileInputHandler(handler: (file: File) => void) {
+  return (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (file) handler(file);
   };
 }
 
