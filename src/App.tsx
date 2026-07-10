@@ -309,8 +309,8 @@ export default function App() {
         project: state.project,
         school: state.school,
         modules: state.modules,
-        interview: state.interview,
-        plan: state.plan
+        // 진단 분석은 CSV 설문 데이터만 보는 작업이라 면담 전사·기존 운영계획을 보낼 필요가 없다.
+        ...(task === "diagnosis" ? {} : { interview: state.interview, plan: state.plan })
       });
 
       if (requestEpoch !== requestEpochRef.current) {

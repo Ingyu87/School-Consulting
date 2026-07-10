@@ -158,8 +158,10 @@ export type AiDraftRequest = {
   project: ParsedDiagnosisProject | null;
   school: SchoolInfo;
   modules: TrainingModule[];
-  interview: InterviewState;
-  plan: PlanState;
+  // "diagnosis"는 CSV 설문 데이터만 분석하는 작업이라 면담 전사·기존 운영계획을 참고하지 않는다.
+  // 그 외 작업(interview-plan, module-content)에서만 실제로 채워서 보낸다.
+  interview?: InterviewState;
+  plan?: PlanState;
 };
 
 export type AiModuleUpdate = {

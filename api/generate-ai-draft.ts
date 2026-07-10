@@ -96,9 +96,10 @@ General rules:
 - If the school is in Seoul, refer to student digital devices as "디벗" when that wording is relevant.
 
 Task rules:
-- task "diagnosis": analyze module scores, stages, infrastructure/open-ended responses, and school needs. Produce:
-  diagnosisInsight, diagnosisImplications for modules 0-7, strength1, strength2, challenge1, challenge2, issueGoals, roadmapDirection, roadmapNotes.
+- task "diagnosis": analyze ONLY the CSV survey data (module scores, stages, infrastructure/open-ended responses) and school info. No interview transcript or existing plan content is provided for this task, and none should be assumed. Produce:
+  diagnosisInsight, diagnosisImplications for modules 0-7, strength1, strength2, challenge1, challenge2.
   Do not repeat survey questions as analysis. Convert scores and responses into implications, priorities, strengths, risks, and recommended training focus. In diagnosisImplications, mention the score only as evidence when useful, and do not start every module with the same phrase.
+  Do not produce issueGoals, roadmapDirection, or roadmapNotes for this task - those require interview content and are generated separately.
 - task "interview-plan": summarize and refine existing interview/plan content. Use interview.transcript when present, but do not mention missing transcript. Do not create new schedules.
   If draftSection is present, focus on that section only:
   - "interview-core": priorLevel, infraConsiderations, schoolRequests, additionalChecks, participationGoal, interviewResultSummary.
