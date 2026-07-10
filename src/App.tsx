@@ -212,13 +212,21 @@ export default function App() {
       } catch {
         neisMessage = " · 나이스 자동 조회 건너뜀";
       }
+      const freshInsights = buildInsights(project.moduleScores);
       setState({
         ...fresh,
         project,
         school: { ...fresh.school, ...neisPatch },
         activeTab: "diagnosis",
         modules: fresh.modules.map((module) => ({ ...module, place: project.schoolName })),
-        plan: { ...fresh.plan, editedInsights: buildInsights(project.moduleScores).draft }
+        plan: {
+          ...fresh.plan,
+          editedInsights: freshInsights.draft,
+          strength1: deriveStrengthText(freshInsights.highs[0]),
+          strength2: deriveStrengthText(freshInsights.highs[1]),
+          challenge1: deriveChallengeText(freshInsights.lows[0]),
+          challenge2: deriveChallengeText(freshInsights.lows[1])
+        }
       });
       setAiStatus("");
       setScheduleStatus("");
