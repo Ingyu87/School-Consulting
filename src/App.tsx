@@ -24,6 +24,7 @@ import { applyAiDraftToState } from "./lib/aiApply";
 import { summarizeInterviewTranscript, transcribeInterviewSegment } from "./lib/audio";
 import { createInitialState, hasExistingWork, hydrateState } from "./lib/defaults";
 import { buildInsights, stageDescriptions, stageTone } from "./lib/diagnosis";
+import { diagnosisCombinedText } from "./lib/diagnosisText";
 import { parseDiagnosisCsv } from "./lib/csv/parseDiagnosisCsv";
 import { parseLectureScheduleCsv } from "./lib/csv/parseLectureScheduleCsv";
 import { fetchNeisSchoolInfo, mapNeisToSchoolInfo } from "./lib/neis";
@@ -73,7 +74,7 @@ export default function App() {
   const [showHelp, setShowHelp] = useState(true);
   const [showTranscript, setShowTranscript] = useState(false);
   const [docxGenerating, setDocxGenerating] = useState<"interview" | "plan" | null>(null);
-  const [completionNotice, setCompletionNotice] = useState<{ title: string; detail: string } | null>(null);
+  const [completionNotice, setCompletionNotice] = useState<{ title: string; detail: string; withUndo?: boolean } | null>(null);
   const [toastNotice, setToastNotice] = useState<{ tone: "ok" | "error"; message: string } | null>(null);
   const [aiUndo, setAiUndo] = useState<{ state: AppState; label: string } | null>(null);
   const [aiPreview, setAiPreview] = useState<AiPreviewState | null>(null);
@@ -135,8 +136,8 @@ export default function App() {
     return () => window.clearTimeout(id);
   }, [toastNotice]);
 
-  function showCompletion(title: string, detail: string) {
-    setCompletionNotice({ title, detail });
+  function showCompletion(title: string, detail: string, withUndo = false) {
+    setCompletionNotice({ title, detail, withUndo });
   }
 
   function showToast(message: string, tone: "ok" | "error" = "ok") {
@@ -507,14 +508,18 @@ export default function App() {
   }
 
   function cancelRecording() {
+    const recorder = mediaRecorderRef.current;
+    // 백업 복원·초기화 경로에서 정리용으로도 호출되므로, 실제 녹음 중이 아니었다면
+    // 전사문 롤백이나 "녹음을 취소했습니다" 안내 같은 사용자 가시적 부작용은 내지 않는다.
+    const wasActive = isRecording || (recorder != null && recorder.state !== "inactive");
     cancelledRef.current = true;
     finalizingRef.current = true;
     if (segmentTimerRef.current) window.clearTimeout(segmentTimerRef.current);
-    const recorder = mediaRecorderRef.current;
     if (recorder && recorder.state !== "inactive") recorder.stop();
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     setIsRecording(false);
+    if (!wasActive) return;
     transcriptPartsRef.current = transcriptBeforeRecordingRef.current ? [transcriptBeforeRecordingRef.current] : [];
     setState((current) => ({
       ...current,
@@ -702,7 +707,7 @@ export default function App() {
     setAiUndo({ state: undoState, label });
     setAiPreview(null);
     setAiStatus("AI 초안을 적용했습니다.");
-    showCompletion("적용 완료", aiPreview.task === "diagnosis" ? "AI 심층 분석 결과를 반영했습니다." : `${label}을 반영했습니다.`);
+    showCompletion("적용 완료", aiPreview.task === "diagnosis" ? "AI 심층 분석 결과를 반영했습니다." : `${label}을 반영했습니다.`, true);
   }
 
   function closeAiPreview() {
@@ -823,7 +828,7 @@ export default function App() {
               <div>
                 <strong>{completionNotice.title}</strong>
                 <span>{completionNotice.detail}</span>
-                {aiUndo && (
+                {completionNotice.withUndo && aiUndo && (
                   <button className="toastAction" onClick={undoLastAiApply} type="button">
                     AI 적용 되돌리기
                   </button>
@@ -1315,18 +1320,6 @@ function moduleHelp(moduleId: number, modules: TrainingModule[]) {
   return `${module.id}. ${module.name}: ${module.description}`;
 }
 
-function polishDraftText(text: string) {
-  return text
-    .replace(/극대화함/g, "높일 필요가 있습니다")
-    .replace(/마련함/g, "마련할 필요가 있습니다")
-    .replace(/개발함/g, "개발할 필요가 있습니다")
-    .replace(/정립함/g, "정립할 필요가 있습니다")
-    .replace(/공유함/g, "공유할 필요가 있습니다")
-    .replace(/확산함/g, "확산할 필요가 있습니다")
-    .replace(/강화함/g, "강화할 필요가 있습니다")
-    .replace(/제고함/g, "높일 필요가 있습니다");
-}
-
 function ScheduleTable({ modules, schoolName, onCopy }: { modules: TrainingModule[]; schoolName: string; onCopy?: (event: MouseEvent<HTMLElement>) => void }) {
   if (modules.length === 0) {
     return <p className="emptyText">선택된 과정이 없습니다. 연수 구성에서 과정을 선택하면 스케줄표가 생성됩니다.</p>;
@@ -1372,31 +1365,6 @@ function ScheduleTable({ modules, schoolName, onCopy }: { modules: TrainingModul
       </table>
     </div>
   );
-}
-
-function diagnosisCombinedText(score: ModuleScore, aiImplication?: string) {
-  if (aiImplication?.trim()) {
-    return normalizeDiagnosisAnalysis(aiImplication);
-  }
-  return `${diagnosisResultText(score)} ${normalizeDiagnosisAnalysis(diagnosisImplicationText(score))}`;
-}
-
-function normalizeDiagnosisAnalysis(text: string) {
-  const cleaned = polishDraftText(text)
-    .replace(/^시사점[:：]?\s*/g, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/단계임을 확인함/g, "단계로 해석됩니다")
-    .replace(/것으로 예측됨/g, "것으로 보입니다")
-    .replace(/확인함/g, "확인됩니다")
-    .replace(/마련함/g, "마련할 필요가 있습니다")
-    .replace(/극대화함/g, "높일 필요가 있습니다")
-    .replace(/개발함/g, "개발할 필요가 있습니다")
-    .replace(/정립함/g, "정립할 필요가 있습니다")
-    .replace(/공유함/g, "공유할 필요가 있습니다")
-    .replace(/[.。]+$/g, "");
-  if (!cleaned) return "연수 구성과 면담 내용을 함께 검토해 학교 맞춤형 실행 방향을 구체화할 필요가 있습니다.";
-  return `${cleaned}.`;
 }
 
 function sectionCompletionText(section?: AiDraftRequest["draftSection"]) {
@@ -1474,42 +1442,6 @@ function previewRows(preview: AiPreviewState, modules: TrainingModule[]) {
     ].filter((row) => row.value);
   }
   return [{ label: "AI 초안", value: "적용 가능한 초안을 확인했습니다." }];
-}
-
-function diagnosisResultText(score: ModuleScore) {
-  const stageLabel = score.score < 3.8 ? "도약" : score.score < 4.6 ? "만족" : "추월";
-  if (score.score < 3.8) {
-    return `${score.moduleName} 영역은 평균 ${score.score.toFixed(2)}점으로 ${stageLabel} 단계입니다. 구성원의 공감대와 실행 기반을 더 촘촘히 확인할 필요가 있는 영역으로 해석됩니다.`;
-  }
-  if (score.score < 4.6) {
-    return `${score.moduleName} 영역은 평균 ${score.score.toFixed(2)}점으로 ${stageLabel} 단계입니다. 기본적인 이해와 실행 의지는 형성되어 있으나, 실제 수업·업무 적용 경험을 더 넓힐 여지가 있습니다.`;
-  }
-  return `${score.moduleName} 영역은 평균 ${score.score.toFixed(2)}점으로 ${stageLabel} 단계입니다. 이미 높은 실행 기반을 갖춘 강점 영역으로 볼 수 있습니다.`;
-}
-
-// AI를 아직 안 돌렸거나 특정 모듈만 응답이 비어 있을 때 쓰는 대체 문구.
-// 단계(도약/만족/추월)만으로 문장을 고르면, 같은 단계에 속한 모듈끼리 시사점이
-// 글자 그대로 똑같아 보인다. 그래서 모듈별 실제 초점을 문장 안에 반드시 넣는다.
-const moduleFocusHints: Record<number, string> = {
-  0: "학교 여건과 연수 목표를 구성원이 함께 확인하는 시작 단계",
-  1: "관리자의 AI·디지털 전환 리더십과 운영 체계",
-  2: "학부모의 수업 변화 이해와 가정 연계",
-  3: "학생의 AI·디지털 기초 소양과 안전한 활용",
-  4: "교직원의 실무 문제 해결과 업무 효율화",
-  5: "교과 수업 설계에 AI·디지털 도구를 접목하는 실천력",
-  6: "학교가 희망하는 자율 주제 중심의 맞춤형 수업",
-  7: "연수 이후 변화를 돌아보고 지속 운영 방향을 정리하는 환류 단계"
-};
-
-function diagnosisImplicationText(score: ModuleScore) {
-  const focus = moduleFocusHints[score.moduleId] ?? score.moduleName;
-  if (score.score < 3.8) {
-    return `시사점: ${focus}에 대한 기본 개념과 안전한 실습을 연수에서 우선 배치하고, 사전면담에서 참여 장벽과 필요한 지원 방식을 구체적으로 확인할 필요가 있습니다.`;
-  }
-  if (score.score < 4.6) {
-    return `시사점: ${focus} 영역을 학교 상황에 맞는 실습과 공동 설계 활동으로 연결해 실제 적용력을 높이고, 산출물이 수업·업무 개선으로 이어지도록 설계할 필요가 있습니다.`;
-  }
-  return `시사점: ${focus}에서 확인된 강점 사례를 공유하고 다른 과정과 연결해 학교 전체로 확산하는 방향이 적절합니다.`;
 }
 
 function deriveStrengthText(score?: ModuleScore) {

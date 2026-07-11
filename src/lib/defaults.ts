@@ -231,9 +231,8 @@ export function hasExistingWork(state: AppState): boolean {
   const schoolChanged = JSON.stringify(state.school) !== JSON.stringify(createInitialSchool());
   const interviewChanged = JSON.stringify(state.interview) !== JSON.stringify(createInitialInterview());
   const planChanged = JSON.stringify(state.plan) !== JSON.stringify(createInitialPlan());
-  const modulesChanged = state.modules.some(
-    (module) => module.date || module.time || module.place || module.headcount || module.programName || module.schoolVoice
-  );
+  // 차시·선택 여부·주제 수정처럼 어떤 종류의 모듈 편집이든 빠짐없이 잡히도록 기본값과 통째로 비교한다.
+  const modulesChanged = JSON.stringify(state.modules) !== JSON.stringify(defaultModules);
 
   return schoolChanged || interviewChanged || planChanged || modulesChanged;
 }
