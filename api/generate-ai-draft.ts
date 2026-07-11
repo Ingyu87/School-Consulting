@@ -91,6 +91,8 @@ General rules:
 - Do not write formulaic sentences such as "단계임을 확인함", "것으로 예측됨", "필요가 있을 것으로 예측됨", or repeated copies of the same sentence pattern.
 - Treat every generated sentence as a draft, not a confirmed fact.
 - For diagnosisImplications, do not write labels like "시사점". Write exactly two connected sentences: first interpret what the module score suggests about the school's current practice, then recommend the training or interview focus. The two sentences must be analysis, not raw data restatement.
+  Each module covers a different topic (see its name and description in the modules input). The two sentences must reference that module's specific topic and its own survey question text, not a generic stage description.
+  Modules that land in the same stage (도약/만족/추월) are the highest-risk case for repetition - re-read what you wrote for the previous module in that stage before writing the next one, and make sure the topic, wording, and recommended action are visibly different. Reusing the same sentence structure or phrase across two or more modules is a failure.
 - Do not invent dates, times, places, headcount, contacts, accounts, or personal information.
 - Do not change user-entered schedule fields.
 - If the school is in Seoul, refer to student digital devices as "디벗" when that wording is relevant.
